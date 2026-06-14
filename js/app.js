@@ -96,7 +96,14 @@ window.onload = async function() {
   setupUserSessionContext();
 
   // 2. Tarik Konfigurasi Endpoint Scoped
-  gasUrl = localStorage.getItem(`AURA_GAS_URL_${activeProjectId}`) || "";
+  const defaultGasUrl = "https://script.google.com/macros/s/AKfycbx0MgkdknoR5cYgxZgDYQp72BQ065cX0Rf34UX2BqavItgjTf1plfLJbkfRktJ4ErhtYA/exec";
+  const storedGasUrl = localStorage.getItem(`AURA_GAS_URL_${activeProjectId}`);
+  if (!storedGasUrl || storedGasUrl.includes("dummy") || storedGasUrl.includes("placeholder") || storedGasUrl === "") {
+    localStorage.setItem(`AURA_GAS_URL_${activeProjectId}`, defaultGasUrl);
+    gasUrl = defaultGasUrl;
+  } else {
+    gasUrl = storedGasUrl;
+  }
   geminiApiKey = localStorage.getItem("AURA_GEMINI_KEY") || "";
   budgetLimit = parseInt(localStorage.getItem(`AURA_BUDGET_LIMIT_${activeProjectId}`)) || (activeProjectContext() ? activeProjectContext().budget : 100000000);
 
@@ -1257,6 +1264,8 @@ function closeAddVendorModal() {
 
 function openConfigModal() {
   document.getElementById("config-modal").classList.remove("hidden");
+  document.getElementById("config-gas-url").value = localStorage.getItem(`AURA_GAS_URL_${activeProjectId}`) || "https://script.google.com/macros/s/AKfycbx0MgkdknoR5cYgxZgDYQp72BQ065cX0Rf34UX2BqavItgjTf1plfLJbkfRktJ4ErhtYA/exec";
+  document.getElementById("config-gemini-key").value = localStorage.getItem("AURA_GEMINI_KEY") || "";
 }
 
 function closeConfigModal() {

@@ -19,6 +19,8 @@ let selectedProjectId = null;
 let editingProjectId = null;
 let editingUserEmail = null;
 
+const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbx0MgkdknoR5cYgxZgDYQp72BQ065cX0Rf34UX2BqavItgjTf1plfLJbkfRktJ4ErhtYA/exec";
+
 // Seed data based on mockup screenshots
 const SEED_PROJECTS = [
   {
@@ -26,7 +28,7 @@ const SEED_PROJECTS = [
     name: "Rachel & Kevin's Wedding",
     budget: 100000000,
     due_date: "2027-03-20",
-    gas_url: "",
+    gas_url: DEFAULT_GAS_URL,
     users: [
       {
         email: "rachel.adriana@gmail.com",
@@ -49,7 +51,7 @@ const SEED_PROJECTS = [
     name: "Indah & Tama's Wedding",
     budget: 350000000,
     due_date: "2027-03-20",
-    gas_url: "https://script.google.com/macros/s/dummy/exec",
+    gas_url: DEFAULT_GAS_URL,
     users: [
       {
         email: "tama.decider@sg-corp.com",
@@ -74,6 +76,17 @@ window.onload = function() {
   const localProjects = localStorage.getItem("AURA_PROJECTS");
   if (localProjects) {
     projects = JSON.parse(localProjects);
+    // Auto-heal empty or dummy gas_urls to use the integrated URL
+    let updated = false;
+    projects.forEach(p => {
+      if (!p.gas_url || p.gas_url.includes("dummy") || p.gas_url.includes("placeholder") || p.gas_url === "") {
+        p.gas_url = DEFAULT_GAS_URL;
+        updated = true;
+      }
+    });
+    if (updated) {
+      localStorage.setItem("AURA_PROJECTS", JSON.stringify(projects));
+    }
   } else {
     projects = [...SEED_PROJECTS];
     localStorage.setItem("AURA_PROJECTS", JSON.stringify(projects));
@@ -257,6 +270,7 @@ function renderRoles() {
 function openAddProjectModal() {
   editingProjectId = null;
   document.getElementById("project-form").reset();
+  document.getElementById("form-project-gas").value = DEFAULT_GAS_URL;
   document.getElementById("project-modal-title").innerText = "Buat Proyek Baru";
   document.getElementById("project-modal").classList.remove("hidden");
 }
@@ -272,7 +286,7 @@ function submitProject(e) {
   const name = document.getElementById("form-project-name").value.trim();
   const budget = parseInt(document.getElementById("form-project-budget").value) || 0;
   const date = document.getElementById("form-project-date").value;
-  const gas = document.getElementById("form-project-gas").value.trim();
+  const gas = document.getElementById("form-project-gas").value.trim() || DEFAULT_GAS_URL;
 
   let projectToSync = null;
 
@@ -616,15 +630,32 @@ function formatDate(dateStr) {
    GAS SYNC UTILITY (Superadmin Sync Engine)
    ========================================================================== */
 async function syncProjectWithGAS(url, action, payload) {
-  if (!url) return;
+  let targetUrl = url;
+  if (!targetUrl || targetUrl.includes("/dummy/") || targetUrl.includes("CONTOH") || targetUrl.includes("example")) {
+    targetUrl = DEFAULT_GAS_URL;
+  }
+
+  // Validasi URL sebelum fetch
   try {
-    const response = await fetch(url, {
+    const parsed = new URL(targetUrl);
+    if (!parsed.hostname.includes("script.google.com")) {
+      showToast("⚠️ GAS URL tidak valid. Pastikan URL dari Google Apps Script.");
+      return;
+    }
+  } catch (urlErr) {
+    showToast("⚠️ Format GAS URL tidak valid: " + targetUrl);
+    return;
+  }
+
+  try {
+    const response = await fetch(targetUrl, {
       method: "POST",
+      redirect: "follow",
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({
         action: action,
         projectId: payload.projectId || payload.id || selectedProjectId || "WD-AURA-001",
-        email: "admin@aura.com", // Superadmin
+        email: "admin@aura.com",
         data: payload
       })
     });
@@ -636,6 +667,6 @@ async function syncProjectWithGAS(url, action, payload) {
     }
   } catch (err) {
     console.error("Gagal sinkronisasi admin ke cloud:", err);
-    showToast("Error sinkronisasi cloud: " + err.message);
+    showToast("⚠️ Gagal terhubung ke server GAS. Pastikan URL deployment aktif dan akses diatur ke 'Anyone'.");
   }
 }

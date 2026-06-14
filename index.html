@@ -213,7 +213,7 @@
       form.dispatchEvent(event);
     }
 
-    function handleLogin(e) {
+    async function handleLogin(e) {
       e.preventDefault();
       
       const email = document.getElementById("login-email").value.trim().toLowerCase();
@@ -227,14 +227,66 @@
         return;
       }
 
-      // 2. Load Multi-Tenant Projects
+      // Tampilkan status loading pada tombol login
+      const loginBtn = e.target.querySelector("button[type='submit']");
+      const originalBtnHtml = loginBtn.innerHTML;
+      loginBtn.disabled = true;
+      loginBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Menghubungkan...`;
+
+      // 2. Hubungkan ke Cloud Database (Google Sheets) via Apps Script
+      const defaultGasUrl = "https://script.google.com/macros/s/AKfycbx0MgkdknoR5cYgxZgDYQp72BQ065cX0Rf34UX2BqavItgjTf1plfLJbkfRktJ4ErhtYA/exec";
+      try {
+        const response = await fetch(defaultGasUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({
+            action: "login",
+            email: email,
+            passcode: passcode
+          })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          // Cloud Auth Berhasil! Simpan context project ke LocalStorage
+          localStorage.setItem("AURA_USER", email);
+          localStorage.setItem("AURA_ACTIVE_PROJECT_ID", result.project.id);
+          localStorage.setItem(`AURA_GAS_URL_${result.project.id}`, result.project.gas_url || defaultGasUrl);
+          localStorage.setItem(`AURA_BUDGET_LIMIT_${result.project.id}`, result.project.budget);
+
+          // Update/Insert ke daftar AURA_PROJECTS local
+          let localProjects = localStorage.getItem("AURA_PROJECTS");
+          let projects = localProjects ? JSON.parse(localProjects) : [];
+          const idx = projects.findIndex(p => p.id === result.project.id);
+          if (idx !== -1) {
+            projects[idx] = result.project;
+          } else {
+            projects.push(result.project);
+          }
+          localStorage.setItem("AURA_PROJECTS", JSON.stringify(projects));
+
+          window.location.href = "dashboard.html";
+          return;
+        } else {
+          showLoginError(result.message || "Gagal masuk: Data tidak valid.");
+          loginBtn.disabled = false;
+          loginBtn.innerHTML = originalBtnHtml;
+          return;
+        }
+      } catch (err) {
+        console.warn("Gagal terhubung ke Cloud, menggunakan verifikasi offline fallback:", err);
+      }
+
+      // 3. OFFLINE FALLBACK (Jika tidak ada koneksi internet)
+      loginBtn.disabled = false;
+      loginBtn.innerHTML = originalBtnHtml;
+
       let projects = [];
       const localProjects = localStorage.getItem("AURA_PROJECTS");
       if (localProjects) {
         projects = JSON.parse(localProjects);
       }
 
-      // 3. Authenticate User inside Projects
       let matchedUser = null;
       let matchedProject = null;
 
@@ -256,13 +308,12 @@
           showLoginError("Wedding Token (PIN) salah!");
         }
       } else {
-        // Fallback for default seeded credentials / Guest session
         if (passcode === "2027") {
           localStorage.setItem("AURA_USER", email);
           localStorage.setItem("AURA_ACTIVE_PROJECT_ID", "WD-AURA-001");
           window.location.href = "dashboard.html";
         } else {
-          showLoginError("Akun tidak terdaftar atau token salah!");
+          showLoginError("Akun tidak terdaftar atau token salah (Mode Offline)!");
         }
       }
     }
