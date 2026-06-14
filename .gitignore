@@ -1,0 +1,21 @@
+# Gemini / Antigravity Agent Cache
+.gemini/
+brain/
+scratch/
+logs/
+
+# OS metadata
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# IDE / VS Code configuration
+.vscode/
+.idea/
+
+# Archives & Temporary files
+*.zip
+*.rar
+*.tar.gz
+*.log

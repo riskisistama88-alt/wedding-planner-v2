@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AURA — Rekapitulasi & Pembayaran Vendor</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Inter Font for Apple-Tight Simulation -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Font Awesome for Elegant Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            apple: {
+              primary: "#0066cc",       // Action Blue
+              primaryFocus: "#0071e3",  // Focus Blue
+              primaryOnDark: "#2997ff", // Sky Link Blue
+              ink: "#1d1d1f",           // Near-Black Ink
+              canvas: "#ffffff",        // Pure White
+              parchment: "#f5f5f7",     // Parchment Gray
+              pearl: "#fafafc",         // Pearl Button
+              muted80: "#333333",       // Ink Muted 80
+              muted48: "#7a7a7a",       // Ink Muted 48
+              hairline: "#e0e0e0"       // Soft Border
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Custom External CSS Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+  
+  <style>
+    /* Print Styles for Unduh Laporan PDF */
+    @page {
+      margin: 20mm 15mm 20mm 15mm;
+    }
+    @media print {
+      body {
+        background: white !important;
+        color: black !important;
+      }
+      nav, header, button, .no-print {
+        display: none !important;
+      }
+      .print-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+      table {
+        page-break-inside: auto;
+      }
+      tr {
+        page-break-inside: avoid !important;
+        page-break-after: auto;
+      }
+    }
+  </style>
+</head>
+<body class="bg-apple-parchment text-apple-ink overflow-x-hidden pb-24 md:pb-8">
+
+  <!-- WATERMARK LOGO FOR PRINT (Premium Airmark) -->
+  <div class="hidden print:flex fixed inset-0 items-center justify-center pointer-events-none opacity-[0.03] z-0">
+    <span class="text-[120px] font-black tracking-widest text-black rotate-[-15deg] select-none">AURA</span>
+  </div>
+
+  <!-- TOP NAV: Global Nav (True Black, 44px) -->
+  <nav class="bg-black text-white h-[44px] flex items-center justify-between px-4 sticky top-0 z-50 text-[12px] tracking-tight no-print">
+    <div class="flex items-center gap-3">
+      <span class="font-bold tracking-widest text-sm flex items-center gap-1.5">
+        <i class="fa-solid fa-gem text-apple-primaryOnDark"></i> AURA
+      </span>
+      <span class="text-apple-muted48">|</span>
+      <span class="text-apple-muted48 truncate max-w-[100px] sm:max-w-none">Wedding Workspace</span>
+      <span class="text-apple-muted48">|</span>
+      <span class="text-apple-primaryOnDark flex items-center gap-1.5">
+        <i class="fa-solid fa-user text-xs"></i> <span id="user-greeting" class="font-semibold">User</span>
+      </span>
+    </div>
+    <div class="flex items-center gap-2 sm:gap-3">
+      <button onclick="openConfigModal()" class="text-apple-primaryOnDark hover:underline flex items-center gap-1 min-h-[44px] px-2">
+        <i class="fa-solid fa-cloud-arrow-up"></i> <span class="hidden sm:inline">Koneksi Database</span>
+      </button>
+      <span id="sync-status" class="text-green-400 flex items-center gap-1">
+        <span class="h-2 w-2 rounded-full bg-green-400 inline-block animate-pulse"></span> <span class="hidden xs:inline">Mode Simulasi</span>
+      </span>
+      <span class="text-apple-muted48">|</span>
+      <button onclick="logout()" class="text-red-400 hover:text-red-300 flex items-center gap-1 min-h-[44px] px-2" title="Keluar">
+        <i class="fa-solid fa-right-from-bracket"></i> <span class="hidden sm:inline">Keluar</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- SUB NAV: Frosted Glass Sub Header (52px) -->
+  <header class="bg-apple-parchment/80 backdrop-blur-md sticky top-[44px] z-40 border-b border-apple-hairline min-h-[52px] py-1 flex items-center justify-between px-4 no-print">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+      <div class="flex items-center gap-2">
+        <h1 class="text-[15px] sm:text-[17px] font-semibold text-apple-ink">Rachel & Kevin 2027</h1>
+        <span class="text-[10px] bg-apple-primary/10 text-apple-primary px-2 py-0.5 rounded-full font-semibold hidden sm:inline-block">Bandung - Jakarta</span>
+      </div>
+      
+      <!-- Subnav Navigation Tabs -->
+      <div class="flex items-center gap-1 border-l border-apple-hairline/80 pl-2.5 sm:pl-3">
+        <a href="dashboard.html" class="text-[11px] font-semibold text-apple-muted48 hover:text-apple-ink px-2.5 py-1 rounded-full transition-all">Workspace</a>
+        <a href="rekap.html" class="text-[11px] font-semibold bg-apple-ink text-white px-2.5 py-1 rounded-full shadow-sm">Rekap & Pembayaran</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- PRINT-ONLY INVOICE HEADER -->
+  <div class="hidden print:block w-full py-6 border-b border-gray-300 mb-8">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold">Laporan Rekapitulasi & Pembayaran</h1>
+        <p class="text-xs text-gray-500 mt-1">Rachel & Kevin Wedding 2027 — Bandung - Jakarta</p>
+      </div>
+      <div class="text-right">
+        <h2 class="text-lg font-bold text-blue-600">AURA</h2>
+        <p class="text-[9px] text-gray-400 tracking-wider">AURA WEDDING PLANNER</p>
+      </div>
+    </div>
+  </div>
+
+  <main class="max-w-[1440px] mx-auto px-4 md:px-8 py-6 print-container">
+
+    <!-- SUMMARY CARDS SECTION (Matching your Mockup top row) -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 no-print">
+      <!-- Card 1: Total Anggaran -->
+      <div class="bg-white p-5 rounded-2xl border border-apple-hairline shadow-sm flex items-center justify-between">
+        <div>
+          <span class="text-[10px] text-apple-muted48 font-bold uppercase tracking-wider block mb-1">TOTAL ANGGARAN (LIMIT)</span>
+          <h3 id="limit-card-value" class="text-xl font-bold text-apple-ink">Rp100.000.000</h3>
+        </div>
+        <button onclick="editLimit()" class="w-8 h-8 rounded-full bg-apple-parchment flex items-center justify-center text-apple-muted48 hover:text-apple-ink hover:bg-apple-hairline transition-all" title="Ubah Anggaran">
+          <i class="fa-solid fa-pencil text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Card 2: Pengeluaran Terpilih -->
+      <div class="bg-white p-5 rounded-2xl border border-apple-hairline shadow-sm">
+        <span class="text-[10px] text-apple-muted48 font-bold uppercase tracking-wider block mb-1">PENGELUARAN TERPILIH</span>
+        <h3 id="spent-card-value" class="text-xl font-bold text-apple-primary">Rp0</h3>
+      </div>
+
+      <!-- Card 3: Sisa Alokasi Dana -->
+      <div class="bg-white p-5 rounded-2xl border border-apple-hairline shadow-sm" id="remaining-card-container">
+        <span class="text-[10px] text-apple-muted48 font-bold uppercase tracking-wider block mb-1">SISA ALOKASI DANA</span>
+        <h3 id="remaining-card-value" class="text-xl font-bold text-emerald-600">Rp0</h3>
+      </div>
+
+      <!-- Card 4: Kelengkapan Vendor -->
+      <div class="bg-white p-5 rounded-2xl border border-apple-hairline shadow-sm">
+        <span class="text-[10px] text-apple-muted48 font-bold uppercase tracking-wider block mb-1">KELENGKAPAN VENDOR</span>
+        <h3 id="completion-card-value" class="text-xl font-bold text-apple-ink">0 / 6 Kategori</h3>
+      </div>
+    </section>
+
+    <!-- SECTION 1: REKAPITULASI VENDOR TERPILIH (Mockup Panel 1) -->
+    <section class="bg-white rounded-2xl border border-apple-hairline shadow-sm mb-6 overflow-hidden">
+      <!-- Section Header -->
+      <div class="p-5 border-b border-apple-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-apple-ink">Rekapitulasi Vendor Terpilih</h2>
+          <p class="text-xs text-apple-muted48 mt-0.5">Daftar vendor resmi yang telah disetujui oleh Decider (Tama)</p>
+        </div>
+        <button onclick="printReport()" class="no-print bg-apple-primary hover:bg-apple-primaryFocus text-white text-xs font-semibold px-4 py-2.5 rounded-full transition-all transform active:scale-95 flex items-center justify-center gap-1.5 shadow-sm min-h-[38px]">
+          <i class="fa-solid fa-file-pdf"></i> Unduh Laporan PDF
+        </button>
+      </div>
+
+      <!-- Table Container -->
+      <div class="overflow-x-auto w-full no-scrollbar">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-apple-parchment/60 text-apple-muted48 text-[10px] font-bold uppercase tracking-wider border-b border-apple-hairline">
+              <th class="py-3.5 px-5 w-[150px]">KATEGORI</th>
+              <th class="py-3.5 px-5 w-[250px]">VENDOR TERPILIH</th>
+              <th class="py-3.5 px-5 w-[250px]">PAKET</th>
+              <th class="py-3.5 px-5 w-[180px]">HARGA</th>
+              <th class="py-3.5 px-5">CATATAN TEKNIS / DETAIL PILIHAN</th>
+            </tr>
+          </thead>
+          <tbody id="selected-vendors-tbody" class="divide-y divide-apple-hairline/80 text-xs text-apple-ink">
+            <!-- Populated via JS -->
+            <tr id="selected-vendors-empty" class="hidden">
+              <td colspan="5" class="py-12 text-center text-apple-muted48 bg-apple-parchment/10">
+                Belum ada vendor terpilih. Tentukan pilihan Anda di Workspace.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECTION 2: JADWAL TERMIN PEMBAYARAN (Mockup Panel 2) -->
+    <section class="bg-white rounded-2xl border border-apple-hairline shadow-sm overflow-hidden mb-8">
+      <!-- Section Header -->
+      <div class="p-5 border-b border-apple-hairline flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex items-start gap-2.5">
+          <div class="bg-blue-50 text-blue-600 p-2 rounded-xl mt-0.5 no-print">
+            <i class="fa-solid fa-file-invoice-dollar text-base"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-apple-ink">Jadwal Termin Pembayaran & Bukti Transfer</h2>
+            <p class="text-xs text-apple-muted48 mt-0.5">Rincian termin pembayaran untuk vendor terpilih (DP 30% & Pelunasan 70%)</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 self-end md:self-auto">
+          <!-- Total Terbayar Indicator Card -->
+          <div class="bg-apple-parchment/40 border border-apple-hairline rounded-xl px-4 py-1.5 text-right min-w-[110px]">
+            <span class="text-[9px] text-apple-muted48 font-bold uppercase tracking-wider block mb-0.5">Total Terbayar</span>
+            <span id="total-paid-indicator" class="text-xs font-bold text-emerald-600">Rp0</span>
+          </div>
+          
+          <!-- Sisa Hutang Indicator Card -->
+          <div class="bg-apple-parchment/40 border border-apple-hairline rounded-xl px-4 py-1.5 text-right min-w-[110px]">
+            <span class="text-[9px] text-apple-muted48 font-bold uppercase tracking-wider block mb-0.5">Sisa Hutang Vendor</span>
+            <span id="remaining-debt-indicator" class="text-xs font-bold text-red-600">Rp0</span>
+          </div>
+
+          <!-- Add Term button -->
+          <button onclick="openAddTermModal()" class="no-print bg-apple-primary hover:bg-apple-primaryFocus text-white text-xs font-semibold px-4 py-2.5 rounded-full transition-all transform active:scale-95 flex items-center justify-center gap-1.5 shadow-sm min-h-[38px]">
+            + Tambah Termin
+          </button>
+        </div>
+      </div>
+
+      <!-- Table Container -->
+      <div class="overflow-x-auto w-full no-scrollbar">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-apple-parchment/60 text-apple-muted48 text-[10px] font-bold uppercase tracking-wider border-b border-apple-hairline">
+              <th class="py-3.5 px-5 w-[200px]">VENDOR</th>
+              <th class="py-3.5 px-5 w-[150px]">TAHAPAN TERMIN</th>
+              <th class="py-3.5 px-5 w-[150px]">JUMLAH TAGIHAN</th>
+              <th class="py-3.5 px-5 w-[130px]">JATUH TEMPO</th>
+              <th class="py-3.5 px-5 w-[150px]">BUKTI UPLOAD</th>
+              <th class="py-3.5 px-5 w-[130px]">STATUS BAYAR</th>
+              <th class="py-3.5 px-5 no-print">KELOLA / VERIFIKASI</th>
+            </tr>
+          </thead>
+          <tbody id="payments-tbody" class="divide-y divide-apple-hairline/80 text-xs text-apple-ink">
+            <!-- Populated via JS -->
+            <tr id="payments-empty" class="hidden">
+              <td colspan="7" class="py-12 text-center text-apple-muted48 bg-apple-parchment/10">
+                Belum ada jadwal pembayaran. Tentukan pilihan vendor di Workspace atau klik Tambah Termin.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: ADD PAYMENT TERM -->
+  <div id="add-term-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden no-print">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full p-6 apple-shadow max-h-[90vh] overflow-y-auto no-scrollbar">
+      <div class="flex items-center justify-between border-b border-apple-hairline pb-3 mb-5">
+        <h3 class="text-base font-bold text-apple-ink">Tambah Termin Pembayaran</h3>
+        <button onclick="closeAddTermModal()" class="text-apple-muted48 hover:text-apple-ink min-h-[44px] min-w-[44px] flex items-center justify-center"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="add-term-form" onsubmit="submitNewTerm(event)" class="space-y-4">
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-semibold uppercase mb-1">Pilih Vendor Terpilih</label>
+          <select id="form-vendor-select" class="w-full bg-apple-parchment border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm min-h-[44px]" required>
+            <!-- Render options dynamically from selected vendors -->
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-semibold uppercase mb-1">Tahapan Termin</label>
+          <select id="form-term-stage" onchange="toggleCustomStageInput()" class="w-full bg-apple-parchment border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm min-h-[44px]" required>
+            <option value="DP 30%">Uang Muka (DP 30%)</option>
+            <option value="Pelunasan 70%">Pelunasan Akhir (70%)</option>
+            <option value="Custom">Termin Kustom...</option>
+          </select>
+          <!-- Custom term percentage input -->
+          <input type="number" id="form-term-custom-percent" oninput="suggestAmount()" min="1" max="100" class="w-full bg-apple-parchment border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm min-h-[44px] mt-2 hidden" placeholder="Masukkan persentase (contoh: 20)" value="20">
+        </div>
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-semibold uppercase mb-1">Jumlah Tagihan (IDR)</label>
+          <input type="number" id="form-term-amount" class="w-full bg-apple-parchment border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm min-h-[44px]" placeholder="Contoh: 3000000" required>
+          <span class="text-[9px] text-apple-primary mt-1 block cursor-pointer hover:underline" id="calc-suggest-btn" onclick="suggestAmount()">Hitung otomatis sesuai sisa tagihan vendor</span>
+        </div>
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-semibold uppercase mb-1">Tanggal Jatuh Tempo</label>
+          <input type="date" id="form-term-due" class="w-full bg-apple-parchment border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm min-h-[44px]" required>
+        </div>
+        
+        <div class="flex items-center gap-3 pt-4 border-t border-apple-hairline">
+          <button type="button" onclick="closeAddTermModal()" class="w-1/2 border border-apple-hairline text-apple-ink font-semibold rounded-full py-3 text-xs hover:bg-apple-parchment transition-all min-h-[44px]">Batal</button>
+          <button type="submit" class="w-1/2 bg-apple-primary hover:bg-apple-primaryFocus text-white font-semibold rounded-full py-3 text-xs transition-all transform active:scale-95 min-h-[44px]">Simpan Termin</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: UPLOAD PROOF & VERIFICATION -->
+  <div id="proof-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden no-print">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full p-6 apple-shadow max-h-[90vh] overflow-y-auto no-scrollbar">
+      <div class="flex items-center justify-between border-b border-apple-hairline pb-3 mb-4">
+        <h3 class="text-base font-bold text-apple-ink" id="proof-modal-title">Kelola Pembayaran</h3>
+        <button onclick="closeProofModal()" class="text-apple-muted48 hover:text-apple-ink min-h-[44px] min-w-[44px] flex items-center justify-center"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="space-y-4 mb-6">
+        <div>
+          <span class="text-[10px] text-apple-muted48 font-bold uppercase tracking-wider block mb-0.5">Vendor & Termin</span>
+          <p class="text-sm font-semibold" id="proof-vendor-term">-</p>
+        </div>
+        <div>
+          <span class="text-[10px] text-apple-muted48 font-bold uppercase tracking-wider block mb-0.5">Tagihan</span>
+          <p class="text-sm font-semibold text-apple-primary" id="proof-amount-view">-</p>
+        </div>
+        
+        <!-- Dynamic Proof Display (Image or Fallback) -->
+        <div id="proof-display-container" class="space-y-3">
+          <!-- Real image preview -->
+          <img id="proof-image-view" src="" class="w-full max-h-[280px] object-contain rounded-xl border border-apple-hairline hidden bg-slate-900/5 p-1" alt="Bukti Transfer">
+          
+          <!-- Fallback text receipt -->
+          <div id="proof-fallback-receipt" class="bg-white border border-apple-hairline p-4 rounded-lg text-left text-[10px] font-mono leading-normal shadow-sm hidden">
+            <div class="text-center font-bold border-b border-dashed border-apple-hairline pb-2 mb-2">BUKTI RESI TRANSFER BANK (SIMULASI)</div>
+            <div class="flex justify-between"><span>PENGIRIM:</span><span id="receipt-sender">Rachel Adriana</span></div>
+            <div class="flex justify-between"><span>PENERIMA:</span><span id="receipt-vendor">-</span></div>
+            <div class="flex justify-between font-bold"><span>NOMINAL:</span><span id="receipt-amount">-</span></div>
+            <div class="flex justify-between"><span>STATUS:</span><span class="text-amber-600 font-semibold" id="receipt-status">Menunggu Verifikasi</span></div>
+          </div>
+          
+          <!-- Upload section inside modal -->
+          <div id="modal-upload-area" class="border-2 border-dashed border-apple-hairline rounded-xl p-5 text-center bg-apple-parchment/40 relative hover:bg-apple-hairline/20 transition-all">
+            <input type="file" id="modal-file-input" onchange="handleModalFileUpload(event)" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+            <div class="space-y-1.5 text-apple-muted48">
+              <i class="fa-solid fa-cloud-arrow-up text-2xl text-apple-primary"></i>
+              <p class="text-xs font-semibold text-apple-ink">Upload Bukti Baru</p>
+              <p class="text-[10px]">Ketuk untuk memilih foto bukti transfer</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Footer -->
+      <div class="flex items-center gap-3 pt-4 border-t border-apple-hairline">
+        <button onclick="deletePaymentTerm()" class="w-1/3 border border-red-200 text-red-600 hover:bg-red-50 font-semibold rounded-full py-2.5 text-xs transition-all min-h-[44px]">Hapus</button>
+        <button id="btn-verify-payment" onclick="verifyPaymentStatus()" class="w-2/3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-full py-2.5 text-xs transition-all transform active:scale-95 min-h-[44px]">Verifikasi Lunas</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: BACKEND CONFIGURATION -->
+  <div id="config-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden no-print">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-xl w-full p-6 apple-shadow max-h-[90vh] overflow-y-auto no-scrollbar">
+      <div class="flex items-center justify-between border-b border-apple-hairline pb-3 mb-4">
+        <h3 class="text-base font-bold text-apple-ink">Koneksi Database & Gemini AI</h3>
+        <button onclick="closeConfigModal()" class="text-apple-muted48 hover:text-apple-ink min-h-[44px] min-w-[44px] flex items-center justify-center"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <p class="text-[11px] text-apple-muted80 leading-relaxed mb-4">
+        Simpan koordinasi budget Anda langsung di Google Sheets Anda sendiri dengan menghubungkannya di bawah ini.
+      </p>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-semibold uppercase mb-1">Google Apps Script Web App URL</label>
+          <input type="text" id="config-gas-url" class="w-full bg-apple-parchment border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-xs min-h-[44px]" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-semibold uppercase mb-1">Gemini API Key</label>
+          <input type="password" id="config-gemini-key" class="w-full bg-apple-parchment border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-xs min-h-[44px]" placeholder="AIzaSy...">
+        </div>
+      </div>
+      <div class="flex items-center gap-3 pt-5 mt-5 border-t border-apple-hairline">
+        <button onclick="closeConfigModal()" class="w-1/2 border border-apple-hairline text-apple-ink font-semibold rounded-full py-2.5 text-xs hover:bg-apple-parchment transition-all min-h-[44px]">Batal</button>
+        <button onclick="saveConfiguration()" class="w-1/2 bg-apple-primary hover:bg-apple-primaryFocus text-white font-semibold rounded-full py-2.5 text-xs transition-all transform active:scale-95 min-h-[44px]">Terapkan Koneksi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CUSTOM ALERTS & CONFIRMS FOR IFRAME COMPATIBILITY (iOS Styled Sheets) -->
+  <div id="custom-toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 bg-apple-ink text-white text-xs px-5 py-3.5 rounded-full apple-shadow font-semibold flex items-center gap-2 transition-all opacity-0 pointer-events-none duration-300 no-print">
+    <!-- Render content dynamically -->
+  </div>
+
+  <div id="custom-confirm-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 text-center apple-shadow">
+      <h3 id="confirm-title" class="text-[15px] font-bold text-apple-ink mb-1">Konfirmasi Tindakan</h3>
+      <p id="confirm-msg" class="text-xs text-apple-muted80 mb-5 leading-relaxed">Apakah Anda yakin ingin melanjutkan tindakan ini?</p>
+      <div class="flex items-center gap-3">
+        <button id="btn-confirm-cancel" class="w-1/2 border border-apple-hairline text-apple-ink text-xs font-semibold rounded-full py-3 min-h-[44px]">Batal</button>
+        <button id="btn-confirm-ok" class="w-1/2 bg-apple-primary hover:bg-apple-primaryFocus text-white text-xs font-semibold rounded-full py-3 min-h-[44px]">Lanjutkan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Script for Rekapitulasi page -->
+  <script src="js/rekap.js"></script>
+</body>
+</html>

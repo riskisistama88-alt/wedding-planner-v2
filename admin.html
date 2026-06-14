@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AURA — Superadmin Console</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Inter Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            apple: {
+              primary: "#0066cc",       // Action Blue
+              primaryFocus: "#0071e3",  // Focus Blue
+              primaryOnDark: "#2997ff", // Sky Link Blue
+              ink: "#1d1d1f",           // Near-Black Ink
+              canvas: "#ffffff",        // Pure White
+              parchment: "#f5f5f7",     // Parchment Gray
+              hairline: "#e0e0e0"       // Soft Border
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Custom External CSS Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-apple-parchment text-apple-ink overflow-x-hidden pb-12">
+
+  <!-- TOP NAV: Global Nav (True Black, 44px) -->
+  <nav class="bg-black text-white h-[44px] flex items-center justify-between px-4 sticky top-0 z-50 text-[12px] tracking-tight">
+    <div class="flex items-center gap-3">
+      <span class="font-bold tracking-widest text-sm flex items-center gap-1.5">
+        <i class="fa-solid fa-gem text-apple-primaryOnDark"></i> AURA
+      </span>
+      <span class="text-apple-muted48">|</span>
+      <span class="text-apple-muted48">Superadmin Console</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-apple-primaryOnDark flex items-center gap-1.5">
+        <i class="fa-solid fa-user-shield text-xs"></i> <span>Superadmin</span>
+      </span>
+      <span class="text-apple-muted48">|</span>
+      <button onclick="logout()" class="text-red-400 hover:text-red-300 flex items-center gap-1 min-h-[44px] px-2" title="Keluar">
+        <i class="fa-solid fa-right-from-bracket"></i> <span>Keluar</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-[1440px] mx-auto px-4 md:px-8 py-6">
+
+    <!-- PAGE HEADER -->
+    <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div>
+        <h1 class="text-2xl font-bold text-apple-ink">Superadmin Console</h1>
+        <p class="text-xs text-apple-muted48 mt-0.5">Kelola semua tenant client, proyek pernikahan, konfigurasi peran, dan izin akses.</p>
+      </div>
+      <button onclick="openAddProjectModal()" class="bg-apple-primary hover:bg-apple-primaryFocus text-white text-xs font-semibold px-4 py-2.5 rounded-full transition-all transform active:scale-95 flex items-center justify-center gap-1.5 shadow-sm min-h-[38px]">
+        <i class="fa-solid fa-folder-plus"></i> Buat Proyek Baru
+      </button>
+    </header>
+
+    <!-- SUMMARY CARDS -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <!-- Card 1: Total Proyek -->
+      <div class="bg-white p-5 rounded-2xl border border-apple-hairline shadow-sm flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-folder"></i>
+        </div>
+        <div>
+          <span class="text-[9px] text-apple-muted48 font-bold uppercase tracking-wider block mb-0.5">TOTAL PROYEK CLIENT</span>
+          <h3 id="stat-total-projects" class="text-2xl font-bold text-apple-ink">0</h3>
+        </div>
+      </div>
+
+      <!-- Card 2: Total Akun -->
+      <div class="bg-white p-5 rounded-2xl border border-apple-hairline shadow-sm flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-users-gear"></i>
+        </div>
+        <div>
+          <span class="text-[9px] text-apple-muted48 font-bold uppercase tracking-wider block mb-0.5">TOTAL AKUN PENGGUNA</span>
+          <h3 id="stat-total-users" class="text-2xl font-bold text-apple-ink">0</h3>
+        </div>
+      </div>
+
+      <!-- Card 3: Integrasi API -->
+      <div class="bg-white p-5 rounded-2xl border border-apple-hairline shadow-sm flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <div>
+          <span class="text-[9px] text-apple-muted48 font-bold uppercase tracking-wider block mb-0.5">INTEGRASI API LIVE</span>
+          <h3 id="stat-api-integrations" class="text-2xl font-bold text-apple-ink">0</h3>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTENT GRID -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- LEFT: Direktori Proyek Client (2/3 width) -->
+      <div class="lg:col-span-2 bg-white rounded-2xl border border-apple-hairline shadow-sm overflow-hidden flex flex-col">
+        <div class="p-5 border-b border-apple-hairline flex items-center gap-2.5">
+          <div class="bg-blue-50 text-blue-600 p-2 rounded-xl">
+            <i class="fa-solid fa-list-check"></i>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-apple-ink">Direktori Proyek Client</h2>
+            <p class="text-xs text-apple-muted48 mt-0.5 font-medium">Daftar proyek client aktif yang dikelola dalam sistem multi-tenant.</p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto w-full no-scrollbar flex-1">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-apple-parchment/60 text-apple-muted48 text-[9px] font-bold uppercase tracking-wider border-b border-apple-hairline">
+                <th class="py-3 px-5">NAMA PROYEK</th>
+                <th class="py-3 px-5">ANGGARAN</th>
+                <th class="py-3 px-5">TANGGAL H</th>
+                <th class="py-3 px-5">BACKEND</th>
+                <th class="py-3 px-5 text-center">KELOLA</th>
+              </tr>
+            </thead>
+            <tbody id="projects-tbody" class="divide-y divide-apple-hairline/80 text-xs text-apple-ink">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- RIGHT: Peran (Roles & Permissions) (1/3 width) -->
+      <div class="bg-white rounded-2xl border border-apple-hairline shadow-sm overflow-hidden flex flex-col">
+        <div class="p-5 border-b border-apple-hairline flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="bg-purple-50 text-purple-600 p-2 rounded-xl">
+              <i class="fa-solid fa-user-shield"></i>
+            </div>
+            <div>
+              <h2 id="roles-title" class="text-sm font-bold text-apple-ink">Peran: Silakan Pilih Proyek</h2>
+              <p id="roles-subtitle" class="text-xs text-apple-muted48 mt-0.5 font-medium">Kelola peran & hak akses untuk proyek terpilih.</p>
+            </div>
+          </div>
+          <button id="btn-add-user" onclick="openAddUserModal()" class="w-8 h-8 rounded-full bg-apple-parchment flex items-center justify-center text-apple-muted48 hover:text-apple-ink hover:bg-apple-hairline transition-all hidden" title="Tambah Peran Baru">
+            <i class="fa-solid fa-plus text-xs"></i>
+          </button>
+        </div>
+
+        <!-- Roles List Area -->
+        <div id="roles-container" class="p-5 space-y-4 overflow-y-auto max-h-[500px] no-scrollbar flex-1 bg-apple-parchment/10">
+          <div class="text-center py-12 text-apple-muted48 text-xs">
+            <i class="fa-solid fa-users text-lg mb-2 block text-apple-muted48/60"></i>
+            Pilih salah satu proyek di Direktori sebelah kiri untuk mengonfigurasi peran pengguna.
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- MODAL: BUAT PROYEK BARU (Matching user mockup) -->
+  <div id="project-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-6 apple-shadow max-h-[90vh] overflow-y-auto no-scrollbar">
+      <!-- Header -->
+      <div class="flex items-center justify-between border-b border-apple-hairline pb-3 mb-5">
+        <div>
+          <h3 id="project-modal-title" class="text-base font-bold text-apple-ink">Buat Proyek Baru</h3>
+          <p class="text-xs text-apple-muted48 mt-0.5">Konfigurasikan client baru dan inisialisasi workspace pernikahan.</p>
+        </div>
+        <button onclick="closeAddProjectModal()" class="w-8 h-8 rounded-full bg-apple-parchment hover:bg-apple-hairline text-apple-ink flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form id="project-form" onsubmit="submitProject(event)" class="space-y-4">
+        <div>
+          <label class="block text-[10px] text-gray-500 font-bold uppercase tracking-wide mb-1.5 pl-0.5">Nama Proyek / Pasangan</label>
+          <input type="text" id="form-project-name" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm min-h-[44px]" placeholder="contoh: Rina & Doni's Wedding" required>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-[10px] text-gray-500 font-bold uppercase tracking-wide mb-1.5 pl-0.5">Batas Anggaran (Limit)</label>
+            <input type="number" id="form-project-budget" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm min-h-[44px]" placeholder="300000000" required>
+          </div>
+          <div>
+            <label class="block text-[10px] text-gray-500 font-bold uppercase tracking-wide mb-1.5 pl-0.5">Tanggal Pernikahan (H-Day)</label>
+            <input type="date" id="form-project-date" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm min-h-[44px]" required>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] text-gray-500 font-bold uppercase tracking-wide mb-1.5 pl-0.5">Google Apps Script Web App URL (Opsional)</label>
+          <input type="text" id="form-project-gas" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-xs min-h-[44px]" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+        
+        <div class="flex items-center gap-3 pt-4 border-t border-apple-hairline">
+          <button type="button" onclick="closeAddProjectModal()" class="w-1/2 border border-apple-hairline text-apple-ink font-semibold rounded-full py-3 text-xs hover:bg-apple-parchment transition-all min-h-[44px]">Batal</button>
+          <button type="submit" class="w-1/2 bg-apple-primary hover:bg-apple-primaryFocus text-white font-semibold rounded-full py-3 text-xs transition-all transform active:scale-95 min-h-[44px]">Simpan Proyek</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: TAMBAH PERAN BARU (Matching user mockup) -->
+  <div id="user-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full p-6 apple-shadow max-h-[95vh] overflow-y-auto no-scrollbar">
+      <!-- Header -->
+      <div class="flex items-center justify-between border-b border-apple-hairline pb-3 mb-4">
+        <div>
+          <h3 id="user-modal-title" class="text-base font-bold text-apple-ink">Tambah Peran Baru</h3>
+          <p class="text-xs text-apple-muted48 mt-0.5 font-medium">Atur akun anggota client dan batasan otoritasnya.</p>
+        </div>
+        <button onclick="closeAddUserModal()" class="w-8 h-8 rounded-full bg-apple-parchment hover:bg-apple-hairline text-apple-ink flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form id="user-form" onsubmit="submitUser(event)" class="space-y-4 pb-2">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] text-gray-500 font-bold uppercase tracking-wide mb-1.5 pl-0.5">Nama Peran (Kode)</label>
+            <select id="form-user-role" onchange="autoFillRoleDetails()" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-xs min-h-[44px]" required>
+              <option value="CLIENT_DECIDER">CLIENT_DECIDER (Decider)</option>
+              <option value="CLIENT_INITIATOR">CLIENT_INITIATOR (Initiator)</option>
+              <option value="Custom">Peran Kustom...</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] text-gray-500 font-bold uppercase tracking-wide mb-1.5 pl-0.5">Label Tampilan</label>
+            <input type="text" id="form-user-label" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-xs min-h-[44px]" placeholder="contoh: Decider (Tama)" required>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] text-gray-500 font-bold uppercase tracking-wide mb-1.5 pl-0.5">Email Pengguna (Username)</label>
+          <input type="email" id="form-user-email" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-xs min-h-[44px]" placeholder="contoh: tama@sg-corp.com" required>
+        </div>
+
+        <div>
+          <label class="block text-[10px] text-gray-500 font-bold uppercase tracking-wide mb-1.5 pl-0.5">Wedding Token (PIN Masuk)</label>
+          <input type="text" id="form-user-token" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-xs min-h-[44px]" placeholder="contoh: 270327" required>
+        </div>
+
+        <!-- HAK OTORITAS AKSES (PERMISSIONS) -->
+        <div class="border border-apple-hairline rounded-2xl p-4 space-y-3 bg-white">
+          <div class="flex items-center gap-1.5 text-apple-primary text-[10px] font-bold uppercase tracking-wider border-b border-apple-hairline pb-2 mb-2">
+            <i class="fa-solid fa-shield-halved"></i> Hak Otoritas Akses (Permissions)
+          </div>
+          
+          <label class="flex items-start gap-3 text-xs cursor-pointer select-none leading-relaxed text-apple-muted80">
+            <input type="checkbox" id="perm-vendor" value="Vendor" class="mt-0.5 rounded text-apple-primary focus:ring-apple-primary h-4 w-4 border-apple-hairline cursor-pointer">
+            <span>Mengusulkan & Edit Opsi Vendor</span>
+          </label>
+
+          <label class="flex items-start gap-3 text-xs cursor-pointer select-none leading-relaxed text-apple-muted80">
+            <input type="checkbox" id="perm-budget" value="Budget" class="mt-0.5 rounded text-apple-primary focus:ring-apple-primary h-4 w-4 border-apple-hairline cursor-pointer">
+            <span>Mengedit Batas Maksimal Anggaran</span>
+          </label>
+
+          <label class="flex items-start gap-3 text-xs cursor-pointer select-none leading-relaxed text-apple-muted80">
+            <input type="checkbox" id="perm-milestone" value="Milestone" class="mt-0.5 rounded text-apple-primary focus:ring-apple-primary h-4 w-4 border-apple-hairline cursor-pointer">
+            <span>Mengelola (CRUD) Jadwal Termin Pembayaran</span>
+          </label>
+
+          <label class="flex items-start gap-3 text-xs cursor-pointer select-none leading-relaxed text-apple-muted80">
+            <input type="checkbox" id="perm-verify" value="Verify" class="mt-0.5 rounded text-apple-primary focus:ring-apple-primary h-4 w-4 border-apple-hairline cursor-pointer">
+            <span>Memverifikasi Pembayaran (Ubah Status Lunas)</span>
+          </label>
+        </div>
+
+        <div class="flex items-center gap-3 pt-3 mt-4 border-t border-apple-hairline">
+          <button type="button" onclick="closeAddUserModal()" class="w-1/2 bg-[#f5f5f7] hover:bg-[#e0e0e2] text-apple-ink font-semibold rounded-full py-2.5 text-xs transition-all min-h-[40px]">Batal</button>
+          <button type="submit" class="w-1/2 bg-apple-primary hover:bg-apple-primaryFocus text-white font-semibold rounded-full py-2.5 text-xs transition-all transform active:scale-95 min-h-[40px]">Simpan Peran</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CUSTOM ALERTS & CONFIRMS -->
+  <div id="custom-toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 bg-apple-ink text-white text-xs px-5 py-3.5 rounded-full apple-shadow font-semibold flex items-center gap-2 transition-all opacity-0 pointer-events-none duration-300">
+    <!-- Content dynamically -->
+  </div>
+
+  <div id="custom-confirm-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 text-center apple-shadow">
+      <h3 id="confirm-title" class="text-[15px] font-bold text-apple-ink mb-1">Konfirmasi Tindakan</h3>
+      <p id="confirm-msg" class="text-xs text-apple-muted80 mb-5 leading-relaxed">Apakah Anda yakin ingin melanjutkan?</p>
+      <div class="flex items-center gap-3">
+        <button id="btn-confirm-cancel" class="w-1/2 border border-apple-hairline text-apple-ink text-xs font-semibold rounded-full py-3 min-h-[44px]">Batal</button>
+        <button id="btn-confirm-ok" class="w-1/2 bg-apple-primary hover:bg-apple-primaryFocus text-white text-xs font-semibold rounded-full py-3 min-h-[44px]">Lanjutkan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin JS Script -->
+  <script src="js/admin.js"></script>
+</body>
+</html>

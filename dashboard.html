@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AURA — Interactive Wedding Planner & AI Budget Motherboard</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Inter Font for Apple-Tight Simulation -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Font Awesome for Elegant Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Marked.js for Markdown Rendering of Gemini AI Analysis -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            apple: {
+              primary: "#0066cc",       // Action Blue
+              primaryFocus: "#0071e3",  // Focus Blue
+              primaryOnDark: "#2997ff", // Sky Link Blue
+              ink: "#1d1d1f",           // Near-Black Ink
+              canvas: "#ffffff",        // Pure White
+              parchment: "#f5f5f7",     // Parchment Gray
+              pearl: "#fafafc",         // Pearl Button
+              tile1: "#272729",         // Near-Black Tile 1
+              tile2: "#2a2a2c",         // Near-Black Tile 2
+              muted80: "#333333",       // Ink Muted 80
+              muted48: "#7a7a7a",       // Ink Muted 48
+              hairline: "#e0e0e0"       // Soft Border
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Custom External CSS Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-apple-parchment text-apple-ink overflow-x-hidden pb-24 md:pb-8">
+
+  <!-- TOP NAV: Global Nav (True Black, 44px) -->
+  <nav class="bg-black text-white h-[44px] flex items-center justify-between px-4 sticky top-0 z-50 text-[12px] tracking-tight">
+    <div class="flex items-center gap-3">
+      <span class="font-bold tracking-widest text-sm flex items-center gap-1.5">
+        <i class="fa-solid fa-gem text-apple-primaryOnDark"></i> AURA
+      </span>
+      <span class="text-apple-muted48">|</span>
+      <span class="text-apple-muted48 truncate max-w-[100px] sm:max-w-none">Wedding Workspace</span>
+      <span class="text-apple-muted48">|</span>
+      <span class="text-apple-primaryOnDark flex items-center gap-1.5">
+        <i class="fa-solid fa-user text-xs"></i> <span id="user-greeting" class="font-semibold">User</span>
+      </span>
+    </div>
+    <div class="flex items-center gap-2 sm:gap-3">
+      <button onclick="openConfigModal()" class="text-apple-primaryOnDark hover:underline flex items-center gap-1 min-h-[44px] px-2">
+        <i class="fa-solid fa-cloud-arrow-up"></i> <span class="hidden sm:inline">Koneksi Database</span>
+      </button>
+      <span id="sync-status" class="text-green-400 flex items-center gap-1">
+        <span class="h-2 w-2 rounded-full bg-green-400 inline-block animate-pulse"></span> <span class="hidden xs:inline">Mode Simulasi</span>
+      </span>
+      <span class="text-apple-muted48">|</span>
+      <button onclick="logout()" class="text-red-400 hover:text-red-300 flex items-center gap-1 min-h-[44px] px-2" title="Keluar">
+        <i class="fa-solid fa-right-from-bracket"></i> <span class="hidden sm:inline">Keluar</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- SUB NAV: Frosted Glass Dynamic Budget Tracker (52px) -->
+  <header class="bg-apple-parchment/80 backdrop-blur-md sticky top-[44px] z-40 border-b border-apple-hairline min-h-[52px] py-1 flex items-center justify-between px-4">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+      <div class="flex items-center gap-2">
+        <h1 class="text-[15px] sm:text-[17px] font-semibold text-apple-ink">Rachel & Kevin 2027</h1>
+        <span class="text-[10px] bg-apple-primary/10 text-apple-primary px-2 py-0.5 rounded-full font-semibold hidden sm:inline-block">Bandung - Jakarta</span>
+      </div>
+      
+      <!-- Subnav Navigation Tabs -->
+      <div class="flex items-center gap-1 border-l border-apple-hairline/80 pl-2.5 sm:pl-3">
+        <a href="dashboard.html" class="text-[11px] font-semibold bg-apple-ink text-white px-2.5 py-1 rounded-full shadow-sm">Workspace</a>
+        <a href="rekap.html" class="text-[11px] font-semibold text-apple-muted48 hover:text-apple-ink px-2.5 py-1 rounded-full transition-all">Rekap & Pembayaran</a>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="hidden lg:flex items-center gap-6 text-xs">
+        <div>
+          <span class="text-apple-muted48 text-[10px] block">Limit Anggaran</span>
+          <span class="font-semibold text-apple-ink" id="subnav-limit">Rp100.000.000</span>
+        </div>
+        <div>
+          <span class="text-apple-muted48 text-[10px] block">Anggaran Terpilih</span>
+          <span class="font-semibold text-apple-primary" id="subnav-spent">Rp0</span>
+        </div>
+        <div>
+          <span class="text-apple-muted48 text-[10px] block">Sisa Dana</span>
+          <span class="font-semibold" id="subnav-remaining">Rp0</span>
+        </div>
+      </div>
+      <button onclick="openAddVendorModal()" class="bg-apple-primary hover:bg-apple-primaryFocus text-white text-[12px] px-4 py-2 rounded-full font-medium transition-all transform active:scale-95 min-h-[36px] flex items-center justify-center">
+        + <span class="hidden xs:inline ml-1">Tambah Vendor</span><span class="xs:hidden ml-1">Vendor</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-[1440px] mx-auto px-4 md:px-8 py-6">
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+      
+      <!-- LEFT COLUMN (1/4 Width) -->
+      <aside class="lg:col-span-1 space-y-6">
+        
+        <!-- CARD 1: KATEGORI VENDOR -->
+        <div class="bg-white p-5 rounded-2xl border border-apple-hairline shadow-sm">
+          <span class="text-[10px] text-apple-muted48 font-bold uppercase tracking-wider block mb-4">KATEGORI VENDOR</span>
+          <nav class="space-y-1" id="category-sidebar">
+            <!-- Rendered dynamically via JS to show active state and counts -->
+          </nav>
+        </div>
+
+        <!-- CARD 2: PENGGUNAAN ANGGARAN -->
+        <div class="bg-white p-5 rounded-2xl border border-apple-hairline shadow-sm flex flex-col items-center">
+          <div class="flex justify-between items-center w-full mb-4">
+            <span class="text-[10px] text-apple-muted48 font-bold uppercase tracking-wider">PENGGUNAAN ANGGARAN</span>
+            <button id="btn-edit-limit-sidebar" onclick="editBudgetLimitFromSidebar()" class="text-apple-muted48 hover:text-apple-ink transition-colors" title="Ubah Anggaran">
+              <i class="fa-solid fa-pencil text-xs"></i>
+            </button>
+          </div>
+          
+          <!-- Circular Progress Bar -->
+          <div class="relative w-32 h-32 flex items-center justify-center mb-4">
+            <svg class="w-full h-full transform -rotate-90">
+              <circle cx="64" cy="64" r="50" stroke="#f5f5f7" stroke-width="8" fill="transparent" />
+              <circle id="budget-circle" cx="64" cy="64" r="50" stroke="#0066cc" stroke-width="10" fill="transparent" stroke-dasharray="314" stroke-dashoffset="314" stroke-linecap="round" class="transition-all duration-1000" />
+            </svg>
+            <div class="absolute text-center">
+              <span id="budget-percentage" class="text-xl font-bold text-apple-ink">0%</span>
+              <span class="text-[9px] text-apple-muted48 block uppercase tracking-wider">TERPAKAI</span>
+            </div>
+          </div>
+          
+          <!-- Safe badge indicator -->
+          <div id="budget-status-badge" class="w-full text-center py-2 px-3 rounded-xl border text-xs font-medium flex items-center justify-center gap-1.5 transition-colors duration-300">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+
+        <!-- CARD 3: PERENCANA KOLABORASI LDR -->
+        <div class="bg-white p-5 rounded-2xl border border-apple-hairline shadow-sm">
+          <span class="text-[10px] text-apple-muted48 font-bold uppercase tracking-wider block mb-4">PERENCANA KOLABORASI TIM</span>
+          <div class="space-y-3.5" id="collaborators-list">
+            <!-- Dynamic list based on project users -->
+          </div>
+        </div>
+
+      </aside>
+
+      <!-- RIGHT COLUMN (3/4 Width) -->
+      <section class="lg:col-span-3 space-y-6">
+        
+        <!-- HEADER CARD: Alternatif Vendor & Filters -->
+        <div class="bg-white p-5 rounded-2xl border border-apple-hairline shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 id="catalog-title" class="text-base font-bold text-apple-ink">Semua Alternatif Vendor</h2>
+            <p id="catalog-subtitle" class="text-xs text-apple-muted48 mt-0.5">Menampilkan seluruh data coretan vendor yang diajukan oleh pasangan dan planner.</p>
+          </div>
+          
+          <!-- Segmented Filter Control -->
+          <div class="bg-apple-parchment p-1 rounded-xl flex gap-1 self-start sm:self-auto text-[11px] font-medium text-apple-muted48 shadow-sm">
+            <button onclick="setStatusFilter('all')" id="filter-all" class="px-3 py-1.5 rounded-lg transition-all">Semua Status</button>
+            <button onclick="setStatusFilter('Draft')" id="filter-Draft" class="px-3 py-1.5 rounded-lg transition-all">Draft</button>
+            <button onclick="setStatusFilter('Selected')" id="filter-Selected" class="px-3 py-1.5 rounded-lg transition-all">Terpilih</button>
+            <button onclick="setStatusFilter('Eliminated')" id="filter-Eliminated" class="px-3 py-1.5 rounded-lg transition-all">Dieliminasi</button>
+          </div>
+        </div>
+
+        <!-- GEMINI AI ANALYSIS DYNAMIC ALERT BANNER -->
+        <div id="gemini-trigger-container" class="bg-gradient-to-r from-apple-primary/10 to-indigo-500/10 border border-apple-primary/20 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 hidden">
+          <div class="flex items-center gap-3.5 w-full sm:w-auto">
+            <div class="bg-gradient-to-tr from-apple-primary to-indigo-600 p-2.5 rounded-xl text-white flex-shrink-0">
+              <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
+            </div>
+            <div>
+              <h4 class="text-xs font-bold text-apple-ink flex items-center gap-1.5 flex-wrap">Gemini AI Model 2.5 Active <span class="bg-indigo-100 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded-full font-medium">Saran Instan</span></h4>
+              <p class="text-[11px] text-apple-muted80">Ada lebih dari satu opsi di kategori <strong id="gemini-active-category" class="text-apple-primary font-bold">Venue</strong>. Jalankan komparasi AI sekarang.</p>
+            </div>
+          </div>
+          <button id="btn-compare-ai" onclick="runGeminiComparison()" class="w-full sm:w-auto bg-gradient-to-r from-apple-primary to-indigo-600 hover:from-apple-primaryFocus hover:to-indigo-700 text-white text-xs font-semibold px-5 py-3 rounded-full flex items-center justify-center gap-2 transition-all shadow-sm transform active:scale-95 min-h-[44px]">
+            <i class="fa-solid fa-sparkles"></i> Bandingkan Spesifikasi via Gemini
+          </button>
+        </div>
+
+        <!-- AI Analysis Result Panel (With horizontal scroll safeguards for generated tables) -->
+        <div id="gemini-analysis-panel" class="bg-apple-parchment border border-apple-hairline p-5 md:p-8 rounded-3xl hidden">
+          <div class="flex items-center justify-between border-b border-apple-hairline pb-4 mb-5">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-wand-magic-sparkles text-indigo-600"></i>
+              <h3 class="text-[15px] font-bold text-apple-ink" id="ai-panel-title">Analisis Perbandingan Gemini AI</h3>
+            </div>
+            <button onclick="closeAIPanel()" class="text-apple-muted48 hover:text-apple-ink min-h-[44px] min-w-[44px] flex items-center justify-center">
+              <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+          <!-- Wrap in scroll block to guarantee mobile markdown table layout does not overflow -->
+          <div class="overflow-x-auto w-full no-scrollbar">
+            <div id="ai-panel-content" class="prose max-w-none text-xs sm:text-sm text-apple-muted80 leading-relaxed space-y-4">
+              <!-- Rendered Markdown goes here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- VENDORS GRID -->
+        <div id="vendors-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <!-- Cards rendered via JS -->
+        </div>
+
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- MOBILE BOTTOM STICKY BAR: Apple Floating Sticky (Visible on Mobile <= 767px) -->
+  <div class="fixed bottom-0 left-0 right-0 z-40 bg-apple-parchment/90 backdrop-blur-md border-t border-apple-hairline h-[66px] flex items-center justify-between px-5 md:hidden">
+    <div class="flex flex-col">
+      <span class="text-[10px] text-apple-muted48 font-medium">Dana Terpilih</span>
+      <span id="sticky-spent-view" class="text-[15px] font-bold text-apple-primary">Rp0</span>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="openAddVendorModal()" class="bg-apple-primary hover:bg-apple-primaryFocus text-white text-xs font-semibold px-4 py-2.5 rounded-full transition-all transform active:scale-95 min-h-[44px] flex items-center justify-center shadow-sm">
+        + Vendor
+      </button>
+      <button onclick="scrollToTop()" class="bg-white border border-apple-hairline text-apple-ink text-xs font-semibold px-3 py-2.5 rounded-full min-h-[44px] flex items-center justify-center">
+        <i class="fa-solid fa-arrow-up"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD VENDOR (iOS Bottom-Sheet Style Dialog) -->
+  <div id="add-vendor-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden transition-all duration-300">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-6 apple-shadow max-h-[90vh] overflow-y-auto no-scrollbar">
+      <!-- Drag handle helper on mobile -->
+      <div class="w-12 h-1 bg-apple-hairline rounded-full mx-auto mb-4 sm:hidden"></div>
+      
+      <div class="flex items-center justify-between border-b border-apple-hairline pb-3 mb-5">
+        <h3 class="text-lg font-bold text-apple-ink">Tambah Vendor Baru</h3>
+        <button onclick="closeAddVendorModal()" class="text-apple-muted48 hover:text-apple-ink min-h-[44px] min-w-[44px] flex items-center justify-center"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="add-vendor-form" onsubmit="submitNewVendor(event)" class="space-y-4 pb-6 sm:pb-0">
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-bold uppercase tracking-wider mb-1 pl-0.5">Kategori Esensial</label>
+          <select id="form-category" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm min-h-[44px]" required>
+            <option value="Venue">Venue / Gedung</option>
+            <option value="Catering">Catering</option>
+            <option value="Decoration">Dekorasi</option>
+            <option value="MUA">MUA & Busana</option>
+            <option value="Photo">Dokumentasi</option>
+            <option value="WO">WO & MC</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-bold uppercase tracking-wider mb-1 pl-0.5">Nama Vendor</label>
+          <input type="text" id="form-name" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm min-h-[44px]" placeholder="contoh: Puspa Catering" required>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] text-apple-muted48 font-bold uppercase tracking-wider mb-1 pl-0.5">Nama Paket</label>
+            <input type="text" id="form-package" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm min-h-[44px]" placeholder="contoh: Gold 500 pax" required>
+          </div>
+          <div>
+            <label class="block text-[10px] text-apple-muted48 font-bold uppercase tracking-wider mb-1 pl-0.5">Harga Paket (Rp)</label>
+            <input type="number" id="form-price" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm min-h-[44px]" placeholder="contoh: 125000000" required>
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-bold uppercase tracking-wider mb-1 pl-0.5">Catatan Teknis / Titik Kritis</label>
+          <textarea id="form-notes" rows="3" class="w-full bg-[#f5f5f7] border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-sm" placeholder="contoh: Gedung Full AC, Parkir luas, Charge MUA luar 150rb" required></textarea>
+        </div>
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-bold uppercase tracking-wider mb-1 pl-0.5">Unggah Lampiran Brosur / Layout Foto</label>
+          <div class="relative bg-[#f5f5f7] border border-dashed border-apple-hairline rounded-xl p-3 text-center flex items-center justify-between min-h-[44px]">
+            <input type="file" id="form-brochure-file" accept="image/*" onchange="handleBrochureUpload(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+            <div id="brochure-preview-text" class="text-xs text-gray-500 font-medium truncate flex-1 text-left pl-1">
+              Pilih foto brosur (atau kosongkan untuk acak)
+            </div>
+            <div class="flex items-center gap-2 pr-1">
+              <img id="brochure-thumbnail" src="" class="w-8 h-8 object-cover rounded-lg hidden border border-apple-hairline bg-white">
+              <i class="fa-regular fa-image text-gray-400 text-sm" id="brochure-upload-icon"></i>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-bold uppercase tracking-wider mb-1 pl-0.5">Tautan Google Drive (Brosur / Pricelist / Kontrak)</label>
+          <div class="relative flex items-center bg-[#f5f5f7] rounded-xl overflow-hidden min-h-[44px]">
+            <input type="url" id="form-drive-url" class="w-full bg-transparent border-0 focus:ring-0 pl-3 pr-10 py-3 text-xs" placeholder="https://drive.google.com/...">
+            <div class="absolute right-3 flex items-center pointer-events-none text-emerald-600 text-sm">
+              <i class="fa-brands fa-google-drive"></i>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex items-center gap-3 pt-4 border-t border-apple-hairline">
+          <button type="button" onclick="closeAddVendorModal()" class="w-1/2 border border-apple-hairline text-apple-ink font-semibold rounded-full py-3 text-xs hover:bg-apple-parchment transition-all min-h-[44px]">Batal</button>
+          <button type="submit" class="w-1/2 bg-apple-primary hover:bg-apple-primaryFocus text-white font-semibold rounded-full py-3 text-xs transition-all transform active:scale-95 min-h-[44px]">Simpan Draft</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: BACKEND CONFIGURATION -->
+  <div id="config-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-xl w-full p-6 apple-shadow max-h-[90vh] overflow-y-auto no-scrollbar">
+      <div class="w-12 h-1 bg-apple-hairline rounded-full mx-auto mb-4 sm:hidden"></div>
+      
+      <div class="flex items-center justify-between border-b border-apple-hairline pb-3 mb-4">
+        <h3 class="text-lg font-bold text-apple-ink">Koneksi Database & Gemini AI</h3>
+        <button onclick="closeConfigModal()" class="text-apple-muted48 hover:text-apple-ink min-h-[44px] min-w-[44px] flex items-center justify-center"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      
+      <p class="text-[11px] text-apple-muted80 leading-relaxed mb-4">
+        Aplikasi menggunakan struktur serverless. Simpan koordinasi budget Anda langsung di Google Sheets Anda sendiri dengan menghubungkannya di bawah ini.
+      </p>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-semibold uppercase mb-1">Google Apps Script Web App URL</label>
+          <input type="text" id="config-gas-url" class="w-full bg-apple-parchment border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-xs min-h-[44px]" placeholder="https://script.google.com/macros/s/.../exec">
+          <span class="text-[9px] text-apple-muted48 mt-1 block">Biarkan kosong untuk menggunakan <strong>Database Simulasi internal browser</strong>.</span>
+        </div>
+
+        <div>
+          <label class="block text-[10px] text-apple-muted48 font-semibold uppercase mb-1">Gemini API Key</label>
+          <input type="password" id="config-gemini-key" class="w-full bg-apple-parchment border-0 focus:ring-1 focus:ring-apple-primary rounded-xl p-3 text-xs min-h-[44px]" placeholder="AIzaSy...">
+          <span class="text-[9px] text-apple-muted48 mt-1 block">Digunakan untuk memproses analisis komparasi multi-vendor melalui panel cerdas.</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 pt-5 mt-5 border-t border-apple-hairline pb-6 sm:pb-0">
+        <button onclick="closeConfigModal()" class="w-1/2 border border-apple-hairline text-apple-ink font-semibold rounded-full py-2.5 text-xs hover:bg-apple-parchment transition-all min-h-[44px]">Batal</button>
+        <button onclick="saveConfiguration()" class="w-1/2 bg-apple-primary hover:bg-apple-primaryFocus text-white font-semibold rounded-full py-2.5 text-xs transition-all transform active:scale-95 min-h-[44px]">Terapkan Koneksi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMMERSIVE SIDE SHEET: SELECTED VENDOR DETAIL (iOS / Apple Style Slide Over) -->
+  <div id="vendor-detail-sheet" class="fixed inset-0 z-50 overflow-hidden hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
+    <div class="absolute inset-0 overflow-hidden">
+      <!-- Backdrop overlay -->
+      <div onclick="closeVendorDetail()" class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"></div>
+      
+      <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-0 sm:pl-10">
+        <!-- Slide-over panel container -->
+        <div id="vendor-detail-panel" class="slide-over-enter pointer-events-auto w-screen max-w-2xl bg-white apple-shadow flex flex-col h-full rounded-t-3xl sm:rounded-l-3xl sm:rounded-tr-none">
+          
+          <!-- Header -->
+          <div class="px-6 py-5 border-b border-apple-hairline flex items-center justify-between bg-apple-parchment/40 backdrop-blur-md">
+            <div class="flex items-center gap-2">
+              <span id="detail-badge" class="bg-apple-primary text-white text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider">Venue</span>
+              <span id="detail-status-badge" class="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider flex items-center gap-1">Selected</span>
+            </div>
+            <button onclick="closeVendorDetail()" class="text-apple-ink hover:text-apple-muted48 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center">
+              <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+
+          <!-- Scrollable Immersive Content -->
+          <div class="flex-1 overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
+            <!-- Header Spec Title -->
+            <div>
+              <h2 id="detail-name" class="text-2xl sm:text-3xl font-semibold text-apple-ink leading-tight mb-1">Nama Vendor</h2>
+              <p id="detail-package" class="text-sm sm:text-base text-apple-muted48 font-medium">Nama Paket Terpilih</p>
+            </div>
+
+            <!-- Immersive Photographic/SVG Frame -->
+            <div class="w-full h-56 sm:h-64 bg-apple-parchment rounded-2xl flex flex-col items-center justify-center relative overflow-hidden product-shadow border border-apple-hairline">
+              <div class="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent z-10"></div>
+              <img id="detail-brochure-img" src="" class="absolute inset-0 w-full h-full object-cover hidden">
+              <div id="detail-placeholder-container" class="flex flex-col items-center justify-center">
+                <span id="detail-placeholder-letter" class="text-6xl font-bold tracking-widest text-apple-ink/10">VEN</span>
+                <span class="text-[10px] text-apple-muted48/60 uppercase tracking-widest mt-2 font-bold">AURA Exclusive Curated Suite</span>
+              </div>
+            </div>
+
+            <!-- Budget Matrix & Cost Analysis Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div class="bg-apple-parchment p-4 rounded-xl border border-apple-hairline">
+                <span class="text-[10px] text-apple-muted48 block mb-0.5 uppercase tracking-wider font-semibold">Total Biaya</span>
+                <span id="detail-price" class="text-lg font-bold text-apple-primary">Rp0</span>
+              </div>
+              <div class="bg-apple-parchment p-4 rounded-xl border border-apple-hairline">
+                <span class="text-[10px] text-apple-muted48 block mb-0.5 uppercase tracking-wider font-semibold">Biaya Per Tamu</span>
+                <span id="detail-cost-per-guest" class="text-lg font-bold text-apple-ink">Rp0</span>
+                <span class="text-[9px] text-apple-muted48 block">Asumsi 1.000 Pax</span>
+              </div>
+              <div class="bg-apple-parchment p-4 rounded-xl border border-apple-hairline">
+                <span class="text-[10px] text-apple-muted48 block mb-0.5 uppercase tracking-wider font-semibold">Alokasi Anggaran</span>
+                <span id="detail-allocation" class="text-lg font-bold text-indigo-600">0%</span>
+                <span id="detail-allocation-desc" class="text-[9px] text-apple-muted48 block">Dari target budget</span>
+              </div>
+            </div>
+
+            <!-- Deep Facilities Note -->
+            <div class="space-y-2">
+              <h4 class="text-xs text-apple-muted48 font-bold uppercase tracking-wider">Fasilitas & Catatan Teknis Lengkap</h4>
+              <div class="bg-white border border-apple-hairline p-5 rounded-xl text-sm leading-relaxed text-apple-muted80 whitespace-pre-wrap" id="detail-notes">
+                Catatan teknis draf...
+              </div>
+            </div>
+
+            <!-- Google Drive Contract / Pricelist Link -->
+            <div id="detail-drive-section" class="space-y-2 hidden">
+              <h4 class="text-xs text-apple-muted48 font-bold uppercase tracking-wider">Dokumen Lampiran (Google Drive)</h4>
+              <a id="detail-drive-link" href="" target="_blank" class="border border-emerald-300 bg-emerald-50 text-emerald-800 text-xs font-semibold px-4 py-3 rounded-xl flex items-center justify-between hover:bg-emerald-100 transition-colors">
+                <span class="flex items-center gap-2">
+                  <i class="fa-brands fa-google-drive text-base text-emerald-600"></i> Buka Brosur / Kontrak di Google Drive
+                </span>
+                <i class="fa-solid fa-up-right-from-square text-[10px] text-emerald-600"></i>
+              </a>
+            </div>
+
+            <!-- Dynamic LDR Action Tasklist Checklist -->
+            <div class="space-y-3 bg-apple-parchment/60 p-5 rounded-2xl border border-apple-hairline">
+              <h4 class="text-xs text-apple-muted48 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid fa-list-check text-apple-primary"></i> Checklist Rencana Aksi Pernikahan (To-Do List)
+              </h4>
+              <ul class="space-y-2.5 text-xs text-apple-muted80" id="detail-checklist">
+                <!-- Checklist items populated via JS -->
+              </ul>
+            </div>
+
+            <!-- LDR Critical Alert Box -->
+            <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl text-amber-800 text-xs flex gap-3">
+              <i class="fa-solid fa-triangle-exclamation text-base text-amber-600 flex-shrink-0 mt-0.5"></i>
+              <div>
+                <h5 class="font-bold mb-0.5">Titik Kritis Kolaborasi Pernikahan</h5>
+                <p id="detail-ldr-warning">Pilihan ini membutuhkan koordinasi intensif bersama pasangan.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer Action Panel -->
+          <div class="px-6 py-5 border-t border-apple-hairline bg-apple-parchment/40 flex items-center justify-between gap-4 pb-12 sm:pb-5">
+            <span class="text-xs text-apple-muted80 font-medium truncate max-w-[200px]">Ingin beralih ke vendor lain?</span>
+            <div class="flex items-center gap-2">
+              <button id="detail-action-toggle" class="bg-apple-primary hover:bg-apple-primaryFocus text-white text-xs font-semibold px-5 py-2.5 rounded-full transition-all transform active:scale-95 min-h-[44px]">
+                Ubah Status Opsi
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CUSTOM ALERTS & CONFIRMS FOR IFRAME COMPATIBILITY (iOS Styled Sheets) -->
+  <div id="custom-toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 bg-apple-ink text-white text-xs px-5 py-3.5 rounded-full apple-shadow font-semibold flex items-center gap-2 transition-all opacity-0 pointer-events-none duration-300">
+    <!-- Render content dynamically -->
+  </div>
+
+  <div id="custom-confirm-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 text-center apple-shadow">
+      <h3 id="confirm-title" class="text-[15px] font-bold text-apple-ink mb-1">Konfirmasi Tindakan</h3>
+      <p id="confirm-msg" class="text-xs text-apple-muted80 mb-5 leading-relaxed">Apakah Anda yakin ingin melanjutkan tindakan ini?</p>
+      <div class="flex items-center gap-3">
+        <button id="btn-confirm-cancel" class="w-1/2 border border-apple-hairline text-apple-ink text-xs font-semibold rounded-full py-3 min-h-[44px]">Batal</button>
+        <button id="btn-confirm-ok" class="w-1/2 bg-apple-primary hover:bg-apple-primaryFocus text-white text-xs font-semibold rounded-full py-3 min-h-[44px]">Lanjutkan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Wedding Planner Application Script -->
+  <script src="js/app.js"></script>
+</body>
+</html>

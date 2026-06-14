@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AURA — Wedding Planner Login</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Inter Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            apple: {
+              primary: "#0066cc",
+              primaryFocus: "#0071e3",
+              darkCard: "#1c1c1e",      // Apple Dark Grey Card
+              darkInput: "#2c2c2e"      // Apple Dark Grey Input
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #000000; /* Pitch black background */
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    .shake {
+      animation: shake 0.4s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center px-4 relative">
+
+  <!-- MAIN LOGIN CARD -->
+  <div id="login-card" class="w-full max-w-[420px] bg-apple-darkCard rounded-[28px] p-8 sm:p-10 shadow-2xl transition-all duration-300">
+    
+    <!-- HEADER LOGO AREA -->
+    <div class="text-center mb-8">
+      <!-- Blue Ring Badge -->
+      <div class="w-16 h-16 bg-[#252528] rounded-full flex items-center justify-center mx-auto mb-4 border border-white/5 shadow-inner">
+        <svg class="w-9 h-9" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="12" cy="12" rx="8" ry="4" stroke="#2997ff" stroke-width="3" transform="rotate(-15 12 12)"/>
+        </svg>
+      </div>
+      
+      <!-- App Name -->
+      <h1 class="text-3xl font-bold tracking-tight text-white mb-1.5">AURA</h1>
+      <!-- Subtitle -->
+      <p class="text-[13px] text-gray-400 font-normal leading-relaxed">
+        Interactive Wedding Planner & Motherboard
+      </p>
+    </div>
+
+    <!-- ERROR ALERT MESSAGE -->
+    <div id="error-alert" class="bg-red-500/10 border border-red-500/20 text-red-300 text-xs px-4 py-3 rounded-xl mb-5 hidden">
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-circle-exclamation text-sm text-red-400"></i>
+        <span id="error-message">Token salah. Silakan coba lagi.</span>
+      </div>
+    </div>
+
+    <!-- FORM -->
+    <form id="login-form" onsubmit="handleLogin(event)" class="space-y-5">
+      <!-- Email Field -->
+      <div>
+        <label class="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2 pl-0.5">EMAIL ANDA</label>
+        <input type="email" id="login-email" class="w-full bg-apple-darkInput border-0 focus:ring-1 focus:ring-apple-primary rounded-xl py-3 px-4 text-sm font-medium text-white placeholder-gray-500 transition-all outline-none" placeholder="contoh: indah@gmail.com" required>
+      </div>
+
+      <!-- Wedding Token (Pre-shared Pin) -->
+      <div>
+        <label class="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2 pl-0.5">WEDDING TOKEN (PRE-SHARED PIN)</label>
+        <input type="password" id="login-passcode" class="w-full bg-apple-darkInput border-0 focus:ring-1 focus:ring-apple-primary rounded-xl py-3 px-4 text-sm font-medium text-white placeholder-gray-600 tracking-widest transition-all outline-none" placeholder="••••••••" required>
+      </div>
+
+      <!-- Submit Button -->
+      <div class="pt-2">
+        <button type="submit" class="w-full bg-apple-primary hover:bg-apple-primaryFocus active:scale-[0.98] text-white text-sm font-semibold py-3.5 rounded-full transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/10">
+          Masuk ke Dashboard <span class="text-base">&rarr;</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- COLLAPSIBLE DEMO ACCOUNTS (Discreet and placed outside main mockup card) -->
+  <div class="mt-8 text-center">
+    <button onclick="toggleDemoMenu()" class="text-[11px] text-gray-500 hover:text-gray-400 font-medium transition-colors focus:outline-none">
+      <i class="fa-solid fa-circle-info mr-1"></i> Bantuan Masuk (Demo)
+    </button>
+      <div id="demo-menu" class="hidden mt-3 max-w-[340px] bg-apple-darkCard/40 border border-white/5 rounded-2xl p-3 text-left shadow-lg mx-auto space-y-2">
+        <p class="text-[10px] text-gray-400 mb-1 leading-relaxed text-center">Pilih profil di bawah untuk mengisi form secara otomatis:</p>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button onclick="quickFill('rachel.adriana@gmail.com', '2027')" class="bg-[#2c2c2e]/50 hover:bg-[#2c2c2e] text-[9px] text-white py-1.5 px-2 rounded-lg text-center transition-all">
+            Rachel (2027)
+          </button>
+          <button onclick="quickFill('kevin.pradana@gmail.com', '2027')" class="bg-[#2c2c2e]/50 hover:bg-[#2c2c2e] text-[9px] text-white py-1.5 px-2 rounded-lg text-center transition-all">
+            Kevin (2027)
+          </button>
+          <button onclick="quickFill('tama.decider@sg-corp.com', '270327')" class="bg-[#2c2c2e]/50 hover:bg-[#2c2c2e] text-[9px] text-white py-1.5 px-2 rounded-lg text-center transition-all">
+            Tama (270327)
+          </button>
+          <button onclick="quickFill('indah.adr@gmail.com', '270327')" class="bg-[#2c2c2e]/50 hover:bg-[#2c2c2e] text-[9px] text-white py-1.5 px-2 rounded-lg text-center transition-all">
+            Indah (270327)
+          </button>
+        </div>
+        <button onclick="quickFill('admin@aura.com', 'admin123')" class="w-full bg-blue-600/20 hover:bg-blue-600/40 text-[9px] text-blue-200 py-1.5 px-2 rounded-lg text-center transition-all border border-blue-500/25">
+          Superadmin Console (admin123)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Redirect if already logged in
+    const activeUser = localStorage.getItem("AURA_USER");
+    if (activeUser) {
+      if (activeUser === "admin@aura.com") {
+        window.location.href = "admin.html";
+      } else {
+        window.location.href = "dashboard.html";
+      }
+    }
+
+    function toggleDemoMenu() {
+      const menu = document.getElementById("demo-menu");
+      menu.classList.toggle("hidden");
+    }
+
+    function quickFill(email, passcode) {
+      document.getElementById("login-email").value = email;
+      document.getElementById("login-passcode").value = passcode;
+      
+      // Submit form
+      const form = document.getElementById("login-form");
+      const event = new Event('submit', { cancelable: true });
+      form.dispatchEvent(event);
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      
+      const email = document.getElementById("login-email").value.trim().toLowerCase();
+      const passcode = document.getElementById("login-passcode").value.trim();
+      const card = document.getElementById("login-card");
+
+      // 1. Superadmin Bypass Check
+      if (email === "admin@aura.com" && passcode === "admin123") {
+        localStorage.setItem("AURA_USER", "admin@aura.com");
+        window.location.href = "admin.html";
+        return;
+      }
+
+      // 2. Load Multi-Tenant Projects
+      let projects = [];
+      const localProjects = localStorage.getItem("AURA_PROJECTS");
+      if (localProjects) {
+        projects = JSON.parse(localProjects);
+      }
+
+      // 3. Authenticate User inside Projects
+      let matchedUser = null;
+      let matchedProject = null;
+
+      for (const p of projects) {
+        const u = p.users.find(item => item.email === email);
+        if (u) {
+          matchedUser = u;
+          matchedProject = p;
+          break;
+        }
+      }
+
+      if (matchedUser) {
+        if (passcode === matchedUser.token) {
+          localStorage.setItem("AURA_USER", email);
+          localStorage.setItem("AURA_ACTIVE_PROJECT_ID", matchedProject.id);
+          window.location.href = "dashboard.html";
+        } else {
+          showLoginError("Wedding Token (PIN) salah!");
+        }
+      } else {
+        // Fallback for default seeded credentials / Guest session
+        if (passcode === "2027") {
+          localStorage.setItem("AURA_USER", email);
+          localStorage.setItem("AURA_ACTIVE_PROJECT_ID", "WD-AURA-001");
+          window.location.href = "dashboard.html";
+        } else {
+          showLoginError("Akun tidak terdaftar atau token salah!");
+        }
+      }
+    }
+
+    function showLoginError(msg) {
+      const errorAlert = document.getElementById("error-alert");
+      const errorMsg = document.getElementById("error-message");
+      const card = document.getElementById("login-card");
+      
+      errorMsg.innerText = msg;
+      errorAlert.classList.remove("hidden");
+      
+      // Shake animation
+      card.classList.add("shake");
+      setTimeout(() => {
+        card.classList.remove("shake");
+      }, 400);
+    }
+  </script>
+</body>
+</html>
