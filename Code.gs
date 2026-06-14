@@ -60,6 +60,12 @@ function doPost(e) {
       case "getProjectData":
         response = fetchProjectContextData(projectId);
         break;
+      case "login":
+        response = loginUser(email, payload.passcode || payload.passcode_token);
+        break;
+      case "getAdminData":
+        response = getAdminMasterData();
+        break;
 
       // ====================================================================
       // ROUTE 3: TRANSAKSI SPREADSHEET TERISOLASI TENANT (Workspace & Kas)
@@ -88,12 +94,7 @@ function doPost(e) {
 
 function createJsonResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeaders({
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type"
-    });
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 // ==========================================================================
@@ -176,7 +177,11 @@ function executeDynamicProvisioning(project, email) {
   const driveRoot = getOrCreateFolder(DRIVE_ROOT_FOLDER_NAME);
   const projectFolder = driveRoot.createFolder("Uploads_" + project.id);
   const projectFolderId = projectFolder.getId();
-  projectFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  try {
+    projectFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch(e) {
+    Logger.log("Domain policy restricted public folder sharing: " + e.toString());
+  }
 
   // 3. Tulis Metadata Hasil Provisioning ke Registry Pusat
   projSheet.appendRow([
@@ -463,7 +468,11 @@ function uploadBase64ToSpecificFolder(base64Data, fileName, folderId) {
   const blob = Utilities.newBlob(Utilities.base64Decode(parts[1]), mimeType, fileName);
   const folder = DriveApp.getFolderById(folderId);
   const file = folder.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  try {
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch(e) {
+    Logger.log("Domain policy restricted public file sharing: " + e.toString());
+  }
   return file.getUrl();
 }
 
@@ -513,6 +522,140 @@ function removeRowsByColumnMatchTwoCriteria(sheet, col1, val1, col2, val2) {
   }
 }
 
+function loginUser(email, passcode) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const usersSheet = ss.getSheetByName(MASTER_REGISTRY.USERS);
+  const rawUsers = usersSheet.getDataRange().getValues();
+  let matchedUserRow = null;
+  
+  for (let i = 1; i < rawUsers.length; i++) {
+    if (rawUsers[i][1].toString().toLowerCase() === email.toLowerCase() && rawUsers[i][4].toString() === passcode) {
+      matchedUserRow = {
+        projectId: rawUsers[i][0],
+        email: rawUsers[i][1],
+        role: rawUsers[i][2],
+        label: rawUsers[i][3],
+        token: rawUsers[i][4],
+        permissions: rawUsers[i][5] ? rawUsers[i][5].split(",") : []
+      };
+      break;
+    }
+  }
+  
+  if (!matchedUserRow) {
+    return { success: false, message: "Email atau token PIN salah." };
+  }
+  
+  // Ambil detail project dari Project Registry
+  const projSheet = ss.getSheetByName(MASTER_REGISTRY.PROJECTS);
+  const rawProjects = projSheet.getDataRange().getValues();
+  let matchedProjectRow = null;
+  
+  for (let k = 1; k < rawProjects.length; k++) {
+    if (rawProjects[k][0] === matchedUserRow.projectId) {
+      matchedProjectRow = {
+        id: rawProjects[k][0],
+        name: rawProjects[k][1],
+        spreadsheetId: rawProjects[k][2],
+        folderId: rawProjects[k][3],
+        due_date: rawProjects[k][4] instanceof Date ? rawProjects[k][4].toISOString().split('T')[0] : rawProjects[k][4].toString(),
+        gas_url: rawProjects[k][5] || ""
+      };
+      break;
+    }
+  }
+  
+  if (!matchedProjectRow) {
+    return { success: false, message: "Proyek tidak ditemukan untuk user ini." };
+  }
+  
+  // Ambil semua user untuk project ini
+  const projectUsers = [];
+  for (let i = 1; i < rawUsers.length; i++) {
+    if (rawUsers[i][0] === matchedUserRow.projectId) {
+      projectUsers.push({
+        email: rawUsers[i][1],
+        role: rawUsers[i][2],
+        label: rawUsers[i][3],
+        token: rawUsers[i][4],
+        permissions: rawUsers[i][5] ? rawUsers[i][5].split(",") : []
+      });
+    }
+  }
+  
+  // Ambil budget dari tenant spreadsheet
+  let budget = 100000000;
+  try {
+    const tenantSS = SpreadsheetApp.openById(matchedProjectRow.spreadsheetId);
+    budget = parseInt(tenantSS.getSheetByName("Sheet_Rekap").getRange("C2").getValue()) || 100000000;
+  } catch(e){}
+  
+  return {
+    success: true,
+    user: matchedUserRow,
+    project: {
+      id: matchedUserRow.projectId,
+      name: matchedProjectRow.name,
+      budget: budget,
+      gas_url: matchedProjectRow.gas_url,
+      users: projectUsers
+    }
+  };
+}
+
+function getAdminMasterData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 1. Ambil data all projects
+  const projSheet = ss.getSheetByName(MASTER_REGISTRY.PROJECTS);
+  const rawProjects = projSheet.getDataRange().getValues();
+  const projectsMap = {};
+  const projectsList = [];
+  
+  for (let i = 1; i < rawProjects.length; i++) {
+    const pId = rawProjects[i][0];
+    if (pId === "GLOBAL") continue;
+    
+    const pObj = {
+      id: pId,
+      name: rawProjects[i][1],
+      spreadsheet_id: rawProjects[i][2],
+      folder_id: rawProjects[i][3],
+      due_date: formatDateString(rawProjects[i][4]),
+      gas_url: rawProjects[i][5] || "",
+      users: []
+    };
+    projectsMap[pId] = pObj;
+    projectsList.push(pObj);
+  }
+  
+  // 2. Ambil data all users
+  const usersSheet = ss.getSheetByName(MASTER_REGISTRY.USERS);
+  const rawUsers = usersSheet.getDataRange().getValues();
+  
+  for (let j = 1; j < rawUsers.length; j++) {
+    const pId = rawUsers[j][0];
+    if (pId === "GLOBAL") continue;
+    
+    const uObj = {
+      email: rawUsers[j][1],
+      role: rawUsers[j][2],
+      label: rawUsers[j][3],
+      token: rawUsers[j][4],
+      permissions: rawUsers[j][5] ? rawUsers[j][5].split(",") : []
+    };
+    
+    if (projectsMap[pId]) {
+      projectsMap[pId].users.push(uObj);
+    }
+  }
+  
+  return {
+    success: true,
+    projects: projectsList
+  };
+}
+
 function getOrCreateFolder(name) {
   const folders = DriveApp.getFoldersByName(name);
   return folders.hasNext() ? folders.next() : DriveApp.createFolder(name);
@@ -548,4 +691,16 @@ function setupMasterRegistry() {
     sh.getRange("A1:E1").setFontWeight("bold").setBackground("#7a7a7a").setFontColor("#ffffff");
     sh.setFrozenRows(1);
   }
+}
+
+function formatDateString(val) {
+  if (!val) return "";
+  if (val instanceof Date) {
+    try {
+      return val.toISOString().split('T')[0];
+    } catch (e) {
+      return val.toString();
+    }
+  }
+  return val.toString();
 }

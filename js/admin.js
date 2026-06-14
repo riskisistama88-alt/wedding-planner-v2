@@ -71,8 +71,8 @@ const SEED_PROJECTS = [
   }
 ];
 
-window.onload = function() {
-  // Load projects database
+window.onload = async function() {
+  // Load projects database from cache (Optimistic Load)
   const localProjects = localStorage.getItem("AURA_PROJECTS");
   if (localProjects) {
     projects = JSON.parse(localProjects);
@@ -100,6 +100,9 @@ window.onload = function() {
   calculateStats();
   renderProjects();
   renderRoles();
+
+  // Tarik data live terupdate dari Google Sheets
+  await fetchLiveMasterDataFromGAS();
 };
 
 /* ==========================================================================
@@ -673,4 +676,44 @@ async function syncAdminOperationToCloud(actionType, payloadData) {
   if (!defaultGasUrl) return;
 
   await syncProjectWithGAS(defaultGasUrl, actionType, payloadData);
+}
+
+// Tarik seluruh data project & user master dari GAS Google Sheets
+async function fetchLiveMasterDataFromGAS() {
+  const defaultGasUrl = localStorage.getItem("AURA_GAS_URL_WD-AURA-001") || DEFAULT_GAS_URL;
+  if (!defaultGasUrl) return;
+
+  try {
+    const response = await fetch(defaultGasUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: "getAdminData",
+        email: "admin@aura.com"
+      })
+    });
+    const result = await response.json();
+    if (result.success && result.projects) {
+      projects = result.projects;
+      
+      // Auto-heal empty or dummy URLs
+      projects.forEach(p => {
+        if (!p.gas_url || p.gas_url.includes("dummy") || p.gas_url.includes("placeholder") || p.gas_url === "") {
+          p.gas_url = DEFAULT_GAS_URL;
+        }
+      });
+      
+      localStorage.setItem("AURA_PROJECTS", JSON.stringify(projects));
+      
+      if (projects.length > 0 && (!selectedProjectId || !projects.some(p => p.id === selectedProjectId))) {
+        selectedProjectId = projects[0].id;
+      }
+      
+      calculateStats();
+      renderProjects();
+      renderRoles();
+    }
+  } catch (err) {
+    console.error("Gagal memuat data live superadmin dari cloud:", err);
+  }
 }
