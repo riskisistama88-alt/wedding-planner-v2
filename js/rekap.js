@@ -425,6 +425,7 @@ function triggerFileUpload(termId) {
       
       const idx = payments.findIndex(p => p.id === termId);
       if (idx !== -1) {
+        const oldPayments = JSON.parse(JSON.stringify(payments));
         payments[idx].proof = file.name;
         payments[idx].proof_data = base64String;
         payments[idx].status = "Menunggu Verifikasi";
@@ -433,6 +434,15 @@ function triggerFileUpload(termId) {
         calculateMetrics();
         renderPayments();
         showToast("Bukti pembayaran berhasil diunggah!");
+
+        if (gasUrl) {
+          syncPaymentTermWithGAS("updatePaymentStatus", {
+            id: termId,
+            status: "Menunggu Verifikasi",
+            proof_data: base64String,
+            proof_name: file.name
+          }, oldPayments);
+        }
       }
     };
     reader.readAsDataURL(file);
@@ -452,6 +462,7 @@ function handleModalFileUpload(e) {
     
     const idx = payments.findIndex(p => p.id === selectedTermId);
     if (idx !== -1) {
+      const oldPayments = JSON.parse(JSON.stringify(payments));
       payments[idx].proof = file.name;
       payments[idx].proof_data = base64String;
       payments[idx].status = "Menunggu Verifikasi";
@@ -463,6 +474,15 @@ function handleModalFileUpload(e) {
       
       // Rerender modal view
       openProofModal(selectedTermId);
+
+      if (gasUrl) {
+        syncPaymentTermWithGAS("updatePaymentStatus", {
+          id: selectedTermId,
+          status: "Menunggu Verifikasi",
+          proof_data: base64String,
+          proof_name: file.name
+        }, oldPayments);
+      }
     }
   };
   reader.readAsDataURL(file);
@@ -591,6 +611,7 @@ function submitNewTerm(e) {
     // UPDATE EXISTED RECORD
     const idx = payments.findIndex(p => p.id === editingTermId);
     if (idx !== -1) {
+      const oldPayments = JSON.parse(JSON.stringify(payments));
       payments[idx].vendor_id = vendorId;
       payments[idx].vendor_name = vendor.vendor_name;
       payments[idx].stage = stageLabel;
@@ -598,9 +619,19 @@ function submitNewTerm(e) {
       payments[idx].due_date = dueDate;
       
       showToast("Termin pembayaran berhasil diperbarui!");
+      localStorage.setItem(`AURA_PAYMENTS_${activeProjectId}`, JSON.stringify(payments));
+      
+      calculateMetrics();
+      renderPayments();
+      closeAddTermModal();
+
+      if (gasUrl) {
+        syncPaymentTermWithGAS("savePaymentTerm", payments[idx], oldPayments);
+      }
     }
   } else {
     // CREATE NEW RECORD
+    const oldPayments = JSON.parse(JSON.stringify(payments));
     const newTerm = {
       id: `PAY-${Date.now().toString().slice(-4)}`,
       vendor_id: vendorId,
@@ -633,6 +664,7 @@ function submitNewTerm(e) {
       }
     }
 
+    let pelunasanTerm = null;
     if (autoCreatePelunasan) {
       // Get active project to read wedding date
       let projects = [];
@@ -657,7 +689,7 @@ function submitNewTerm(e) {
       // Calculate amount: vendor price minus DP amount
       const pelunasanAmount = Math.max(0, vendor.price - amount);
 
-      const pelunasanTerm = {
+      pelunasanTerm = {
         id: `PAY-${(Date.now() + 1).toString().slice(-4)}`,
         vendor_id: vendorId,
         vendor_name: vendor.vendor_name,
@@ -679,13 +711,24 @@ function submitNewTerm(e) {
     } else {
       showToast("Jadwal termin pembayaran disimpan!");
     }
-  }
 
-  localStorage.setItem(`AURA_PAYMENTS_${activeProjectId}`, JSON.stringify(payments));
-  
-  calculateMetrics();
-  renderPayments();
-  closeAddTermModal();
+    localStorage.setItem(`AURA_PAYMENTS_${activeProjectId}`, JSON.stringify(payments));
+    calculateMetrics();
+    renderPayments();
+    closeAddTermModal();
+
+    if (gasUrl) {
+      syncPaymentTermWithGAS("savePaymentTerm", newTerm, oldPayments).then(() => {
+        if (pelunasanTerm) {
+          // Check if it got saved in local storage array
+          const existsLocal = payments.some(p => p.id === pelunasanTerm.id);
+          if (existsLocal) {
+            syncPaymentTermWithGAS("savePaymentTerm", pelunasanTerm, oldPayments);
+          }
+        }
+      });
+    }
+  }
 }
 
 function openProofModal(termId) {
@@ -768,18 +811,22 @@ function verifyPaymentStatus() {
   const idx = payments.findIndex(p => p.id === selectedTermId);
   if (idx === -1) return;
 
+  const oldPayments = JSON.parse(JSON.stringify(payments));
   const currentStatus = payments[idx].status;
+  let newStatus = "";
 
   if (currentStatus === "Lunas") {
     payments[idx].status = "Belum Dibayar";
     payments[idx].proof = "";
     payments[idx].proof_data = "";
+    newStatus = "Belum Dibayar";
     showToast("Status diubah ke Belum Bayar.");
   } else {
     payments[idx].status = "Lunas";
     if (!payments[idx].proof) {
       payments[idx].proof = "verifikasi_manual.png";
     }
+    newStatus = "Lunas";
     showToast("Status termin diverifikasi Lunas!");
   }
 
@@ -787,30 +834,52 @@ function verifyPaymentStatus() {
   calculateMetrics();
   renderPayments();
   closeProofModal();
+
+  if (gasUrl) {
+    syncPaymentTermWithGAS("updatePaymentStatus", {
+      id: selectedTermId,
+      status: newStatus,
+      proof_data: payments[idx].proof_data || "",
+      proof_name: payments[idx].proof || ""
+    }, oldPayments);
+  }
 }
 
 function toggleVerifyDirect(termId) {
   const idx = payments.findIndex(p => p.id === termId);
   if (idx === -1) return;
 
+  const oldPayments = JSON.parse(JSON.stringify(payments));
   const currentStatus = payments[idx].status;
+  let newStatus = "";
 
   if (currentStatus === "Lunas") {
     payments[idx].status = "Belum Dibayar";
     payments[idx].proof = "";
     payments[idx].proof_data = "";
+    newStatus = "Belum Dibayar";
     showToast("Status diubah ke Belum Bayar.");
   } else {
     payments[idx].status = "Lunas";
     if (!payments[idx].proof) {
       payments[idx].proof = "verifikasi_manual.png";
     }
+    newStatus = "Lunas";
     showToast("Status termin diverifikasi Lunas!");
   }
 
   localStorage.setItem(`AURA_PAYMENTS_${activeProjectId}`, JSON.stringify(payments));
   calculateMetrics();
   renderPayments();
+
+  if (gasUrl) {
+    syncPaymentTermWithGAS("updatePaymentStatus", {
+      id: termId,
+      status: newStatus,
+      proof_data: payments[idx].proof_data || "",
+      proof_name: payments[idx].proof || ""
+    }, oldPayments);
+  }
 }
 
 function deletePaymentTerm() {
@@ -820,6 +889,7 @@ function deletePaymentTerm() {
     "Hapus Termin",
     "Apakah Anda yakin ingin menghapus jadwal termin pembayaran ini?",
     () => {
+      const oldPayments = JSON.parse(JSON.stringify(payments));
       payments = payments.filter(p => p.id !== selectedTermId);
       localStorage.setItem(`AURA_PAYMENTS_${activeProjectId}`, JSON.stringify(payments));
       
@@ -827,6 +897,10 @@ function deletePaymentTerm() {
       renderPayments();
       closeProofModal();
       showToast("Termin pembayaran dihapus.");
+
+      if (gasUrl) {
+        syncPaymentTermWithGAS("deletePaymentTerm", { id: selectedTermId }, oldPayments);
+      }
     }
   );
 }
@@ -836,12 +910,17 @@ function deletePaymentTermFromTable(termId) {
     "Hapus Termin",
     "Apakah Anda yakin ingin menghapus jadwal termin pembayaran ini?",
     () => {
+      const oldPayments = JSON.parse(JSON.stringify(payments));
       payments = payments.filter(p => p.id !== termId);
       localStorage.setItem(`AURA_PAYMENTS_${activeProjectId}`, JSON.stringify(payments));
       
       calculateMetrics();
       renderPayments();
       showToast("Termin pembayaran dihapus.");
+
+      if (gasUrl) {
+        syncPaymentTermWithGAS("deletePaymentTerm", { id: termId }, oldPayments);
+      }
     }
   );
 }
@@ -890,11 +969,16 @@ function editLimit() {
     () => {
       const val = prompt("Masukkan Limit Anggaran Pernikahan baru (IDR):", budgetLimit);
       if (val !== null) {
+        const oldLimit = budgetLimit;
         const num = parseInt(val) || 100000000;
         budgetLimit = num;
         localStorage.setItem(`AURA_BUDGET_LIMIT_${activeProjectId}`, budgetLimit);
         calculateMetrics();
         showToast("Limit Anggaran berhasil diperbarui!");
+
+        if (gasUrl) {
+          syncBudgetLimitWithGAS(num, oldLimit);
+        }
       }
     }
   );
@@ -976,4 +1060,99 @@ function formatIDR(num) {
     currency: "IDR",
     minimumFractionDigits: 0
   }).format(num);
+}
+
+/* ==========================================================================
+   GAS MUTATIONS CLOUD SYNC ENGINE & UTILITIES
+   ========================================================================== */
+async function fetchWithRetry(url, options = {}, retries = 5, backoff = 1000) {
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      if (retries > 0 && response.status >= 500) {
+        await new Promise(resolve => setTimeout(resolve, backoff));
+        return fetchWithRetry(url, options, retries - 1, backoff * 2);
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response;
+  } catch (error) {
+    if (retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      return fetchWithRetry(url, options, retries - 1, backoff * 2);
+    }
+    throw error;
+  }
+}
+
+async function syncPaymentTermWithGAS(action, payload, oldPayments = null) {
+  if (!gasUrl) return;
+
+  const syncIndicator = document.getElementById("sync-status");
+  if (syncIndicator) {
+    syncIndicator.innerHTML = `<span class="loader"></span> Menyelaraskan...`;
+    syncIndicator.className = "text-amber-500 flex items-center gap-1.5 text-[11px] font-semibold";
+  }
+
+  try {
+    const response = await fetchWithRetry(gasUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: action,
+        projectId: activeProjectId,
+        email: currentUser,
+        data: payload
+      })
+    });
+    const result = await response.json();
+    if (result.success) {
+      updateSyncStatus();
+      showToast("Perubahan pembayaran disimpan ke Cloud!");
+    } else {
+      showToast("Gagal menyinkronkan: " + result.message);
+      if (oldPayments) {
+        payments = oldPayments;
+        localStorage.setItem(`AURA_PAYMENTS_${activeProjectId}`, JSON.stringify(payments));
+        calculateMetrics();
+        renderPayments();
+      }
+    }
+  } catch (err) {
+    console.error("Gagal sinkronisasi pembayaran ke cloud:", err);
+    if (syncIndicator) {
+      syncIndicator.innerHTML = `<span class="h-2 w-2 rounded-full bg-red-500 inline-block"></span> Sync Error`;
+      syncIndicator.className = "text-red-500 flex items-center gap-1.5 text-[11px] font-semibold";
+    }
+    showToast("Error sinkronisasi cloud: " + err.message);
+  }
+}
+
+async function syncBudgetLimitWithGAS(newLimit, oldLimit) {
+  if (!gasUrl) return;
+  try {
+    const response = await fetchWithRetry(gasUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: "updateBudgetLimit",
+        projectId: activeProjectId,
+        email: currentUser,
+        data: { limit: newLimit }
+      })
+    });
+    const result = await response.json();
+    if (result.success) {
+      showToast("Limit anggaran diperbarui di Cloud!");
+    } else {
+      showToast("Gagal: " + result.message);
+      // Revert limit
+      budgetLimit = oldLimit;
+      localStorage.setItem(`AURA_BUDGET_LIMIT_${activeProjectId}`, budgetLimit);
+      calculateMetrics();
+    }
+  } catch (err) {
+    console.error("Gagal sinkronisasi limit anggaran:", err);
+    showToast("Error sinkronisasi limit anggaran: " + err.message);
+  }
 }

@@ -176,6 +176,20 @@ async function fetchLiveSheetsData() {
   }
 }
 
+function editLimit() {
+  const oldLimit = budgetLimit;
+  const newLimit = prompt("Masukkan Limit Anggaran Pernikahan baru (IDR):", budgetLimit);
+  if (newLimit !== null) {
+    budgetLimit = parseInt(newLimit) || 100000000;
+    localStorage.setItem(`AURA_BUDGET_LIMIT_${activeProjectId}`, budgetLimit);
+    
+    calculateMotherboardBudget();
+    if (gasUrl) {
+      syncWithGAS("updateBudgetLimit", { limit: budgetLimit }, oldLimit);
+    }
+  }
+}
+
 function loadOfflineFallbackData() {
   const localDB = localStorage.getItem(`AURA_VENDORS_DB_${activeProjectId}`);
   if (localDB) {
@@ -575,6 +589,7 @@ function editBudgetLimitFromSidebar() {
     () => {
       const val = prompt("Masukkan Limit Anggaran Pernikahan baru (IDR):", budgetLimit);
       if (val !== null) {
+        const oldLimit = budgetLimit;
         const num = parseInt(val) || 100000000;
         budgetLimit = num;
         localStorage.setItem(`AURA_BUDGET_LIMIT_${activeProjectId}`, budgetLimit);
@@ -587,7 +602,7 @@ function editBudgetLimitFromSidebar() {
         showToast("Batas Anggaran berhasil diperbarui!");
         
         if (gasUrl) {
-          syncWithGAS("updateBudgetLimit", { limit: budgetLimit });
+          syncWithGAS("updateBudgetLimit", { limit: budgetLimit }, oldLimit);
         }
       }
     }
@@ -1035,6 +1050,7 @@ function closeVendorDetail() {
 function changeVendorStatus(vendorId, newStatus) {
   const idx = database.findIndex(v => v.vendor_id === vendorId);
   if (idx !== -1) {
+    const oldDatabase = JSON.parse(JSON.stringify(database));
     database[idx].status = newStatus;
     
     // Single Selected Safeguard
@@ -1054,7 +1070,7 @@ function changeVendorStatus(vendorId, newStatus) {
     showToast("Status vendor diperbarui!");
 
     if (gasUrl) {
-      syncWithGAS("updateVendorStatus", { vendor_id: vendorId, status: newStatus });
+      syncWithGAS("updateVendorStatus", { vendor_id: vendorId, status: newStatus }, oldDatabase);
     }
   }
 }
@@ -1106,6 +1122,7 @@ function submitNewVendor(e) {
     drive_url: driveUrl || ""
   };
 
+  const oldDatabase = JSON.parse(JSON.stringify(database));
   database.push(newVendor);
   localStorage.setItem(`AURA_VENDORS_DB_${activeProjectId}`, JSON.stringify(database));
   
@@ -1116,7 +1133,7 @@ function submitNewVendor(e) {
   showToast("Vendor baru masuk ke draf!");
 
   if (gasUrl) {
-    syncWithGAS("addVendor", newVendor);
+    syncWithGAS("addVendor", newVendor, oldDatabase);
   }
 
   // Reset form and uploaded image state
@@ -1138,6 +1155,7 @@ function confirmDeleteVendor(vendorId) {
     "Hapus Vendor",
     "Apakah Anda yakin ingin menghapus data vendor ini dari motherboard draf?",
     () => {
+      const oldDatabase = JSON.parse(JSON.stringify(database));
       database = database.filter(v => v.vendor_id !== vendorId);
       localStorage.setItem(`AURA_VENDORS_DB_${activeProjectId}`, JSON.stringify(database));
       
@@ -1147,7 +1165,7 @@ function confirmDeleteVendor(vendorId) {
       showToast("Vendor telah dihapus.");
 
       if (gasUrl) {
-        syncWithGAS("deleteVendor", { vendor_id: vendorId });
+        syncWithGAS("deleteVendor", { vendor_id: vendorId }, oldDatabase);
       }
     }
   );
@@ -1156,7 +1174,7 @@ function confirmDeleteVendor(vendorId) {
 /* ==========================================================================
    GAS SYNC ENGINE (Google Sheets API Integration)
    ========================================================================== */
-async function syncWithGAS(action, payload) {
+async function syncWithGAS(action, payload, oldData = null) {
   if (!gasUrl) return;
 
   const syncIndicator = document.getElementById("sync-status");
@@ -1167,14 +1185,46 @@ async function syncWithGAS(action, payload) {
     const res = await fetchWithRetry(gasUrl, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ action: action, data: payload, email: currentUser })
+      body: JSON.stringify({ 
+        action: action, 
+        projectId: activeProjectId,
+        email: currentUser,
+        data: payload
+      })
     });
     
     if (res.ok) {
-      updateSyncStatus();
-      showToast("Database cloud berhasil disinkronkan!");
+      const result = await res.json();
+      if (result.success) {
+        updateSyncStatus();
+        showToast("Database cloud berhasil disinkronkan!");
+        // If it was a vendor upload, and returned brochure_url, update it!
+        if (result.brochure_url && action === "addVendor") {
+          const idx = database.findIndex(v => v.vendor_id === payload.vendor_id);
+          if (idx !== -1) {
+            database[idx].brochure_img = result.brochure_url;
+            localStorage.setItem(`AURA_VENDORS_DB_${activeProjectId}`, JSON.stringify(database));
+            renderVendors();
+          }
+        }
+      } else {
+        showToast("Gagal menyelaraskan: " + result.message);
+        if (oldData !== null) {
+          if (action === "updateBudgetLimit") {
+            budgetLimit = oldData;
+            localStorage.setItem(`AURA_BUDGET_LIMIT_${activeProjectId}`, budgetLimit);
+            calculateMotherboardBudget();
+          } else {
+            database = oldData;
+            localStorage.setItem(`AURA_VENDORS_DB_${activeProjectId}`, JSON.stringify(database));
+            calculateMotherboardBudget();
+            renderVendors();
+          }
+        }
+      }
     }
   } catch (err) {
+    console.error("Sync error:", err);
     syncIndicator.innerHTML = `<span class="h-2 w-2 rounded-full bg-red-500 inline-block"></span> Error`;
     syncIndicator.className = "text-red-500 flex items-center gap-1 text-[11px] font-semibold";
   }

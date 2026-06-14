@@ -274,6 +274,8 @@ function submitProject(e) {
   const date = document.getElementById("form-project-date").value;
   const gas = document.getElementById("form-project-gas").value.trim();
 
+  let projectToSync = null;
+
   if (editingProjectId) {
     // UPDATE
     const idx = projects.findIndex(p => p.id === editingProjectId);
@@ -283,6 +285,7 @@ function submitProject(e) {
       projects[idx].due_date = date;
       projects[idx].gas_url = gas;
       
+      projectToSync = projects[idx];
       showToast("Proyek berhasil diperbarui!");
     }
   } else {
@@ -298,6 +301,7 @@ function submitProject(e) {
     };
     projects.push(newProject);
     selectedProjectId = newId; // Select it
+    projectToSync = newProject;
     showToast("Proyek baru berhasil dibuat!");
   }
 
@@ -306,6 +310,11 @@ function submitProject(e) {
   renderProjects();
   renderRoles();
   closeAddProjectModal();
+
+  // Sync with GAS
+  if (projectToSync && projectToSync.gas_url) {
+    syncProjectWithGAS(projectToSync.gas_url, "saveProject", projectToSync);
+  }
 }
 
 function editProject(projectId) {
@@ -324,6 +333,9 @@ function editProject(projectId) {
 }
 
 function deleteProject(projectId) {
+  const p = projects.find(item => item.id === projectId);
+  const gas = p ? p.gas_url : null;
+
   showConfirm(
     "Hapus Proyek",
     "Apakah Anda yakin ingin menghapus proyek ini beserta seluruh data vendor, termin pembayaran, dan akun penggunanya?",
@@ -344,6 +356,11 @@ function deleteProject(projectId) {
       renderProjects();
       renderRoles();
       showToast("Proyek berhasil dihapus.");
+
+      // Sync with GAS
+      if (gas) {
+        syncProjectWithGAS(gas, "deleteProject", { id: projectId });
+      }
     }
   );
 }
@@ -471,6 +488,19 @@ function submitUser(e) {
   calculateStats();
   renderRoles();
   closeAddUserModal();
+
+  // Sync with GAS
+  if (p.gas_url) {
+    const payload = {
+      projectId: p.id,
+      email: userData.email,
+      role: userData.role,
+      label: userData.label,
+      token: userData.token,
+      permissions: userData.permissions
+    };
+    syncProjectWithGAS(p.gas_url, "saveUserRole", payload);
+  }
 }
 
 function editUser(email) {
@@ -505,12 +535,19 @@ function deleteUser(email) {
       const p = projects.find(item => item.id === selectedProjectId);
       if (!p) return;
 
+      const gas = p.gas_url;
+
       p.users = p.users.filter(u => u.email !== email);
       localStorage.setItem("AURA_PROJECTS", JSON.stringify(projects));
 
       calculateStats();
       renderRoles();
       showToast("Peran berhasil dihapus.");
+
+      // Sync with GAS
+      if (gas) {
+        syncProjectWithGAS(gas, "deleteUserRole", { projectId: p.id, email: email });
+      }
     }
   );
 }
@@ -573,4 +610,32 @@ function formatDate(dateStr) {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/* ==========================================================================
+   GAS SYNC UTILITY (Superadmin Sync Engine)
+   ========================================================================== */
+async function syncProjectWithGAS(url, action, payload) {
+  if (!url) return;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        action: action,
+        projectId: payload.projectId || payload.id || selectedProjectId || "WD-AURA-001",
+        email: "admin@aura.com", // Superadmin
+        data: payload
+      })
+    });
+    const result = await response.json();
+    if (result.success) {
+      showToast("Database cloud berhasil diperbarui!");
+    } else {
+      showToast("Gagal cloud sync: " + result.message);
+    }
+  } catch (err) {
+    console.error("Gagal sinkronisasi admin ke cloud:", err);
+    showToast("Error sinkronisasi cloud: " + err.message);
+  }
 }

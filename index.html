@@ -134,6 +134,60 @@
   </div>
 
   <script>
+    // Seed default demo projects on first load if empty
+    const SEED_PROJECTS = [
+      {
+        id: "WD-AURA-001",
+        name: "Rachel & Kevin's Wedding",
+        budget: 100000000,
+        due_date: "2027-03-20",
+        gas_url: "",
+        users: [
+          {
+            email: "rachel.adriana@gmail.com",
+            role: "CLIENT_DECIDER",
+            label: "Decider (Rachel)",
+            token: "2027",
+            permissions: ["Vendor", "Budget", "Milestone", "Verify"]
+          },
+          {
+            email: "kevin.pradana@gmail.com",
+            role: "CLIENT_INITIATOR",
+            label: "Initiator (Kevin)",
+            token: "2027",
+            permissions: ["Vendor"]
+          }
+        ]
+      },
+      {
+        id: "WD-AURA-002",
+        name: "Indah & Tama's Wedding",
+        budget: 350000000,
+        due_date: "2027-03-20",
+        gas_url: "",
+        users: [
+          {
+            email: "tama.decider@sg-corp.com",
+            role: "CLIENT_DECIDER",
+            label: "Decider (Tama)",
+            token: "270327",
+            permissions: ["Vendor", "Budget", "Milestone", "Verify"]
+          },
+          {
+            email: "indah.adr@gmail.com",
+            role: "CLIENT_INITIATOR",
+            label: "Initiator (Indah)",
+            token: "270327",
+            permissions: ["Vendor"]
+          }
+        ]
+      }
+    ];
+
+    if (!localStorage.getItem("AURA_PROJECTS")) {
+      localStorage.setItem("AURA_PROJECTS", JSON.stringify(SEED_PROJECTS));
+    }
+
     // Redirect if already logged in
     const activeUser = localStorage.getItem("AURA_USER");
     if (activeUser) {
