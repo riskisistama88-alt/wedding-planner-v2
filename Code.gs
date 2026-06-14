@@ -6,8 +6,8 @@
  */
 
 const MASTER_REGISTRY = {
-  PROJECTS: "AURA_Projects",
-  USERS: "AURA_Users",
+  PROJECTS: "ProjectRegistry",
+  USERS: "MasterUsers",
   LOGS: "AURA_Logs"
 };
 
@@ -616,13 +616,40 @@ function getAdminMasterData() {
     const pId = rawProjects[i][0];
     if (pId === "GLOBAL") continue;
     
+    let rawDueDate = rawProjects[i][4] ? rawProjects[i][4].toString() : "";
+    let rawGasUrl = rawProjects[i][5] ? rawProjects[i][5].toString() : "";
+    
+    // Auto-heal data lama yang kolomnya bergeser (karena gas_url berada di kolom ke-5)
+    if (rawDueDate.indexOf("http") === 0 || rawDueDate.indexOf("https") === 0) {
+      rawGasUrl = rawDueDate;
+      rawDueDate = "";
+    }
+    
+    // Ambil budget dari tenant spreadsheet secara dinamis
+    let budget = 100000000;
+    try {
+      const tenantSS = SpreadsheetApp.openById(rawProjects[i][2]);
+      if (tenantSS) {
+        const rekapSheet = tenantSS.getSheetByName("Sheet_Rekap");
+        if (rekapSheet) {
+          const rawCellVal = rekapSheet.getRange("C2").getValue();
+          if (rawCellVal) {
+            // Bersihkan semua karakter non-numerik untuk parsing aman
+            const cleanVal = rawCellVal.toString().replace(/[^0-9]/g, "");
+            budget = parseInt(cleanVal) || 100000000;
+          }
+        }
+      }
+    } catch(e){}
+
     const pObj = {
       id: pId,
       name: rawProjects[i][1],
+      budget: budget,
       spreadsheet_id: rawProjects[i][2],
       folder_id: rawProjects[i][3],
-      due_date: formatDateString(rawProjects[i][4]),
-      gas_url: rawProjects[i][5] || "",
+      due_date: formatDateString(rawDueDate),
+      gas_url: rawGasUrl || "",
       users: []
     };
     projectsMap[pId] = pObj;
@@ -670,21 +697,39 @@ function writeMasterLog(projId, user, action, details) {
 
 function setupMasterRegistry() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss.getSheetByName(MASTER_REGISTRY.PROJECTS)) {
-    const sh = ss.insertSheet(MASTER_REGISTRY.PROJECTS);
-    sh.appendRow(["ProjectID", "ProjectName", "SpreadsheetID", "FolderID", "H_Day", "GAS_URL", "CreatedAt"]);
-    sh.getRange("A1:G1").setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
-    sh.setFrozenRows(1);
+  
+  // 1. Setup ProjectRegistry
+  let projSheet = ss.getSheetByName(MASTER_REGISTRY.PROJECTS);
+  if (!projSheet) {
+    projSheet = ss.insertSheet(MASTER_REGISTRY.PROJECTS);
   }
-  if (!ss.getSheetByName(MASTER_REGISTRY.USERS)) {
-    const sh = ss.insertSheet(MASTER_REGISTRY.USERS);
-    sh.appendRow(["ProjectID", "Email", "Role", "Label", "Token", "Permissions"]);
-    sh.getRange("A1:F1").setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
-    sh.setFrozenRows(1);
-    
-    // Seed kredensial superadmin bypass
-    sh.appendRow(["GLOBAL", "admin@aura.com", "SUPERADMIN", "Console Admin", "admin123", "Vendor,Budget,Milestone,Verify"]);
+  projSheet.getRange(1, 1, 1, 7).setValues([["ProjectID", "ProjectName", "SpreadsheetID", "FolderID", "H_Day", "GAS_URL", "CreatedAt"]]);
+  projSheet.getRange("A1:G1").setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
+  projSheet.setFrozenRows(1);
+
+  // 2. Setup MasterUsers
+  let usersSheet = ss.getSheetByName(MASTER_REGISTRY.USERS);
+  if (!usersSheet) {
+    usersSheet = ss.insertSheet(MASTER_REGISTRY.USERS);
   }
+  usersSheet.getRange(1, 1, 1, 6).setValues([["ProjectID", "Email", "Role", "Label", "Token", "Permissions"]]);
+  usersSheet.getRange("A1:F1").setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
+  usersSheet.setFrozenRows(1);
+  
+  // Seed kredensial superadmin bypass
+  const userData = usersSheet.getDataRange().getValues();
+  let adminExists = false;
+  for (let i = 1; i < userData.length; i++) {
+    if (userData[i][0] === "GLOBAL" && userData[i][1] === "admin@aura.com") {
+      adminExists = true;
+      break;
+    }
+  }
+  if (!adminExists) {
+    usersSheet.appendRow(["GLOBAL", "admin@aura.com", "SUPERADMIN", "Console Admin", "admin123", "Vendor,Budget,Milestone,Verify"]);
+  }
+
+  // 3. Setup AURA_Logs
   if (!ss.getSheetByName(MASTER_REGISTRY.LOGS)) {
     const sh = ss.insertSheet(MASTER_REGISTRY.LOGS);
     sh.appendRow(["Timestamp", "ProjectID", "User", "Action", "Details"]);

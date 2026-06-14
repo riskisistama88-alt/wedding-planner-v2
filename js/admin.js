@@ -610,18 +610,20 @@ function showConfirm(title, message, onOk) {
    UTILITIES
    ========================================================================== */
 function formatIDR(num) {
+  const val = parseFloat(num);
+  if (isNaN(val)) return "Rp 0";
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     minimumFractionDigits: 0
-  }).format(num);
+  }).format(val);
 }
 
 function formatDate(dateStr) {
-  if (!dateStr) return "-";
+  if (!dateStr || dateStr.toString().trim().startsWith("http")) return "-";
   const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
+  if (isNaN(d.getTime())) return "-";
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
 }
 
