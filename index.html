@@ -87,13 +87,13 @@
       <!-- Email Field -->
       <div>
         <label class="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2 pl-0.5">EMAIL ANDA</label>
-        <input type="email" id="login-email" class="w-full bg-apple-darkInput border-0 focus:ring-1 focus:ring-apple-primary rounded-xl py-3 px-4 text-sm font-medium text-white placeholder-gray-500 transition-all outline-none" placeholder="contoh: indah@gmail.com" required>
+        <input type="email" id="login-email" class="w-full bg-apple-darkInput border-0 focus:ring-1 focus:ring-apple-primary rounded-xl py-3 px-4 text-sm font-medium text-white transition-all outline-none" required>
       </div>
 
       <!-- Wedding Token (Pre-shared Pin) -->
       <div>
         <label class="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2 pl-0.5">WEDDING TOKEN (PRE-SHARED PIN)</label>
-        <input type="password" id="login-passcode" class="w-full bg-apple-darkInput border-0 focus:ring-1 focus:ring-apple-primary rounded-xl py-3 px-4 text-sm font-medium text-white placeholder-gray-600 tracking-widest transition-all outline-none" placeholder="••••••••" required>
+        <input type="password" id="login-passcode" class="w-full bg-apple-darkInput border-0 focus:ring-1 focus:ring-apple-primary rounded-xl py-3 px-4 text-sm font-medium text-white tracking-widest transition-all outline-none" required>
       </div>
 
       <!-- Submit Button -->
@@ -103,34 +103,6 @@
         </button>
       </div>
     </form>
-  </div>
-
-  <!-- COLLAPSIBLE DEMO ACCOUNTS (Discreet and placed outside main mockup card) -->
-  <div class="mt-8 text-center">
-    <button onclick="toggleDemoMenu()" class="text-[11px] text-gray-500 hover:text-gray-400 font-medium transition-colors focus:outline-none">
-      <i class="fa-solid fa-circle-info mr-1"></i> Bantuan Masuk (Demo)
-    </button>
-      <div id="demo-menu" class="hidden mt-3 max-w-[340px] bg-apple-darkCard/40 border border-white/5 rounded-2xl p-3 text-left shadow-lg mx-auto space-y-2">
-        <p class="text-[10px] text-gray-400 mb-1 leading-relaxed text-center">Pilih profil di bawah untuk mengisi form secara otomatis:</p>
-        <div class="grid grid-cols-2 gap-1.5">
-          <button onclick="quickFill('rachel.adriana@gmail.com', '2027')" class="bg-[#2c2c2e]/50 hover:bg-[#2c2c2e] text-[9px] text-white py-1.5 px-2 rounded-lg text-center transition-all">
-            Rachel (2027)
-          </button>
-          <button onclick="quickFill('kevin.pradana@gmail.com', '2027')" class="bg-[#2c2c2e]/50 hover:bg-[#2c2c2e] text-[9px] text-white py-1.5 px-2 rounded-lg text-center transition-all">
-            Kevin (2027)
-          </button>
-          <button onclick="quickFill('tama.decider@sg-corp.com', '270327')" class="bg-[#2c2c2e]/50 hover:bg-[#2c2c2e] text-[9px] text-white py-1.5 px-2 rounded-lg text-center transition-all">
-            Tama (270327)
-          </button>
-          <button onclick="quickFill('indah.adr@gmail.com', '270327')" class="bg-[#2c2c2e]/50 hover:bg-[#2c2c2e] text-[9px] text-white py-1.5 px-2 rounded-lg text-center transition-all">
-            Indah (270327)
-          </button>
-        </div>
-        <button onclick="quickFill('admin@aura.com', 'admin123')" class="w-full bg-blue-600/20 hover:bg-blue-600/40 text-[9px] text-blue-200 py-1.5 px-2 rounded-lg text-center transition-all border border-blue-500/25">
-          Superadmin Console (admin123)
-        </button>
-      </div>
-    </div>
   </div>
 
   <script>
@@ -198,20 +170,7 @@
       }
     }
 
-    function toggleDemoMenu() {
-      const menu = document.getElementById("demo-menu");
-      menu.classList.toggle("hidden");
-    }
 
-    function quickFill(email, passcode) {
-      document.getElementById("login-email").value = email;
-      document.getElementById("login-passcode").value = passcode;
-      
-      // Submit form
-      const form = document.getElementById("login-form");
-      const event = new Event('submit', { cancelable: true });
-      form.dispatchEvent(event);
-    }
 
     async function handleLogin(e) {
       e.preventDefault();
