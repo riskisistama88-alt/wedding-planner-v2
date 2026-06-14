@@ -762,8 +762,13 @@ function openProofModal(termId) {
   // Render proof content depending on file type (real uploaded base64 image or fallback mock)
   if (p.proof) {
     if (p.proof_data) {
-      // Real uploaded image
+      // Real uploaded image (Base64)
       imageView.src = p.proof_data;
+      imageView.classList.remove("hidden");
+      fallbackReceipt.classList.add("hidden");
+    } else if (p.proof.startsWith("http") || p.proof.includes("drive.google.com")) {
+      // Real uploaded image (Google Drive URL)
+      imageView.src = getDirectDriveImageUrl(p.proof);
       imageView.classList.remove("hidden");
       fallbackReceipt.classList.add("hidden");
     } else {
@@ -1069,6 +1074,18 @@ function formatIDR(num) {
     currency: "IDR",
     minimumFractionDigits: 0
   }).format(val);
+}
+
+function getDirectDriveImageUrl(url) {
+  if (!url) return "";
+  if (url.startsWith("data:")) return url;
+  if (url.includes("drive.google.com")) {
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      return `https://lh3.googleusercontent.com/d/${match[1]}`;
+    }
+  }
+  return url;
 }
 
 /* ==========================================================================

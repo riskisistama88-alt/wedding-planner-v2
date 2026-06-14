@@ -900,7 +900,7 @@ function openVendorDetail(vendorId) {
 
   if (v.brochure_img) {
     if (brochureImgEl) {
-      brochureImgEl.src = v.brochure_img;
+      brochureImgEl.src = getDirectDriveImageUrl(v.brochure_img);
       brochureImgEl.classList.remove("hidden");
     }
     if (placeholderContainer) {
@@ -1338,4 +1338,16 @@ function formatIDR(num) {
     currency: "IDR",
     minimumFractionDigits: 0
   }).format(val);
+}
+
+function getDirectDriveImageUrl(url) {
+  if (!url) return "";
+  if (url.startsWith("data:")) return url;
+  if (url.includes("drive.google.com")) {
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      return `https://lh3.googleusercontent.com/d/${match[1]}`;
+    }
+  }
+  return url;
 }
