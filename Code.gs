@@ -1,80 +1,77 @@
 /**
  * ==========================================================================
- * AURA SERVERLESS PRO MULTI-TENANT BACKEND ENGINE
- * Google Apps Script Web App Endpoint (Code.gs)
- * Scenario: Dynamic Isolated Tenant Database
+ * AURA SERVERLESS PRO MULTI-TENANT & DYNAMIC ISOLATED DATABASE ENGINE
+ * Web App Production Endpoint (Code.gs)
  * ==========================================================================
  */
+
+const MASTER_REGISTRY = {
+  PROJECTS: "AURA_Projects",
+  USERS: "AURA_Users",
+  LOGS: "AURA_Logs"
+};
 
 const DRIVE_ROOT_FOLDER_NAME = "AURA_Wedding_Planner_Uploads";
 
 function doGet(e) {
   return createJsonResponse({
     success: true,
-    message: "AURA Core Engine REST API aktif. Gunakan POST untuk transaksi data.",
+    message: "AURA Multi-Tenant Core Engine aktif dan berjalan normal.",
     timestamp: new Date().toISOString()
   });
 }
 
 function doPost(e) {
   try {
-    // Jalankan auto-setup struktur tabel registry utama
-    setupDatabase();
+    // Jalankan inisialisasi Master Registry Sheet di awal
+    setupMasterRegistry();
 
     const requestBody = JSON.parse(e.postData.contents);
     const action = requestBody.action;
-    const payload = requestBody.data || requestBody; // Fleksibilitas parsing data payload
+    const payload = requestBody.data || requestBody;
     const email = requestBody.email || "system@aurawedding.com";
-    const projectId = requestBody.projectId || payload.projectId || "WD-AURA-001";
+    const projectId = requestBody.projectId || payload.projectId || (payload.id && payload.id.startsWith("WD-") ? payload.id : "WD-AURA-001");
 
-    let response = { success: false, message: "Aksi '" + action + "' tidak dikenali oleh sistem." };
+    let response = { success: false, message: "Aksi '" + action + "' gagal dieksekusi di server cloud." };
 
     switch (action) {
-      // 1. TWO-WAY INITIAL READ SYNC
+      // ====================================================================
+      // ROUTE 1: OPERASI SUPERADMIN REGISTER (admin.html & admin.js)
+      // ====================================================================
+      case "saveProject":
+        response = executeDynamicProvisioning(payload, email);
+        break;
+        
+      case "deleteProject":
+        response = executeCascadeDeleteTenant(payload.id, email);
+        break;
+        
+      case "saveUserRole":
+        response = saveUserRoleToMaster(payload, email);
+        break;
+        
+      case "deleteUserRole":
+        response = deleteUserFromMaster(payload, email);
+        break;
+
+      // ====================================================================
+      // ROUTE 2: TWO-WAY DATA READ SYNC (dashboard.html & rekap.html)
+      // ====================================================================
       case "getProjectData":
         response = fetchProjectContextData(projectId);
         break;
-      case "login":
-        response = loginUser(email, payload.passcode || payload.passcode_token);
-        break;
 
-      // 2. WORKSPACE MANAGEMENT ACTIONS
+      // ====================================================================
+      // ROUTE 3: TRANSAKSI SPREADSHEET TERISOLASI TENANT (Workspace & Kas)
+      // ====================================================================
       case "addVendor":
-        response = insertVendor(payload, projectId, email);
-        break;
       case "updateVendorStatus":
-        response = updateVendorStatus(payload.vendor_id, payload.status, projectId, email);
-        break;
       case "deleteVendor":
-        response = deleteVendor(payload.vendor_id, projectId, email);
-        break;
       case "updateBudgetLimit":
-        response = updateBudgetLimit(payload.limit, projectId, email);
-        break;
-
-      // 3. MILESTONE & PAYMENT ACTIONS
       case "savePaymentTerm":
-        response = savePaymentTerm(payload, projectId, email);
-        break;
       case "deletePaymentTerm":
-        response = deletePaymentTerm(payload.id, projectId, email);
-        break;
       case "updatePaymentStatus":
-        response = updatePaymentStatus(payload.id, payload.status, payload.proof_data, payload.proof_name, projectId, email);
-        break;
-
-      // 4. SUPERADMIN OPERATIONS
-      case "saveProject":
-        response = saveProjectToSheet(payload, email);
-        break;
-      case "deleteProject":
-        response = deleteProjectFromSheet(payload.id, email);
-        break;
-      case "saveUserRole":
-        response = saveUserRoleToSheet(payload, email);
-        break;
-      case "deleteUserRole":
-        response = deleteUserFromSheet(payload, email);
+        response = routeToIsolatedTenantDatabase(action, projectId, payload, email);
         break;
     }
 
@@ -83,7 +80,7 @@ function doPost(e) {
   } catch (err) {
     return createJsonResponse({ 
       success: false, 
-      message: "Terjadi kegagalan pemrosesan di server Google Apps Script.",
+      message: "Gagal cloud sync: Terjadi kegagalan pemrosesan di server Google Apps Script.",
       error: err.toString()
     });
   }
@@ -91,410 +88,325 @@ function doPost(e) {
 
 function createJsonResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
+    .setMimeType(ContentService.MimeType.JSON)
+    .setHeaders({
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
+    });
 }
 
 // ==========================================================================
-// CORE DATA ENGINE LOGIC (Isolated Tenant routing)
+// CORE PROVISIONING ENGINE (Fungsi Cetak Database Otomatis)
 // ==========================================================================
 
-function getTenantContext(projectId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const registrySheet = ss.getSheetByName("ProjectRegistry");
-  const rawRegistry = registrySheet.getDataRange().getValues();
+function executeDynamicProvisioning(project, email) {
+  const masterSS = SpreadsheetApp.getActiveSpreadsheet();
+  const projSheet = masterSS.getSheetByName(MASTER_REGISTRY.PROJECTS);
+  const data = projSheet.getDataRange().getValues();
   
-  for (let i = 1; i < rawRegistry.length; i++) {
-    if (rawRegistry[i][0] === projectId) {
-      return {
-        spreadsheetId: rawRegistry[i][2],
-        folderId: rawRegistry[i][3],
-        projectName: rawRegistry[i][1]
-      };
+  let foundRow = -1;
+  let existingSpreadsheetId = "";
+  let existingFolderId = "";
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === project.id) {
+      foundRow = i + 1;
+      existingSpreadsheetId = data[i][2]; // Kolom SpreadsheetID
+      existingFolderId = data[i][3];      // Kolom FolderID
+      break;
     }
   }
+
+  // Jika proyek sudah ada, lakukan pembaruan metadata di Registry Pusat
+  if (foundRow !== -1) {
+    projSheet.getRange(foundRow, 2).setValue(project.name);
+    projSheet.getRange(foundRow, 5).setValue(project.due_date);
+    
+    // Perbarui batas anggaran di Spreadsheet terisolasi milik tenant tersebut
+    if (existingSpreadsheetId) {
+      try {
+        const tenantSS = SpreadsheetApp.openById(existingSpreadsheetId);
+        const rekapSheet = tenantSS.getSheetByName("Sheet_Rekap");
+        if (rekapSheet) rekapSheet.getRange("C2").setValue(project.budget);
+      } catch(e){}
+    }
+    
+    writeMasterLog(project.id, email, "UPDATE_PROJECT", "Memperbarui metadata proyek multi-tenant: " + project.name);
+    return { success: true, message: "Metadata proyek berhasil diperbarui." };
+  }
+
+  // --- JIKA PROYEK BARU: CETAK INFRASTRUKTUR CLOUD ISOLATED SECARA OTOMATIS ---
   
-  // Jika tidak ditemukan, daftarkan & cetak otomatis (dynamic self-healing)
-  let defaultName = "Draf Perencanaan";
-  if (projectId === "WD-AURA-001") defaultName = "Rachel & Kevin's Wedding";
-  if (projectId === "WD-AURA-002") defaultName = "Indah & Tama's Wedding";
+  // 1. Lahirkan File Google Sheets Terisolasi Baru
+  const tenantSS = SpreadsheetApp.create("AURA_DB_" + project.id);
+  const tenantSSId = tenantSS.getId();
   
-  return provisionTenantDatabase(projectId, defaultName);
+  // Setup Sheet_Utama (NoSQL Document Store)
+  const shUtama = tenantSS.insertSheet("Sheet_Utama");
+  shUtama.appendRow(['Timestamp', 'ID', 'JenisData', 'Status', 'DataJSON', 'FileURL', 'CreatedBy', 'UpdatedAt']);
+  shUtama.getRange("A1:H1").setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
+  shUtama.setFrozenRows(1);
+  
+  // Setup Sheet_Rekap (Human Readable Ledger)
+  const shRekap = tenantSS.insertSheet("Sheet_Rekap");
+  shRekap.getRange("B1").setValue("AURA MOTHERBOARD BUDGET - " + project.name.toUpperCase()).setFontSize(11).setFontWeight("bold");
+  shRekap.getRange("B2").setValue("Total Budget Limit:").setFontWeight("bold");
+  shRekap.getRange("C2").setValue(project.budget).setNumberFormat("Rp#,##0");
+  shRekap.getRange("B3").setValue("Current Selected Spending:").setFontWeight("bold");
+  shRekap.getRange("C3").setFormula('=SUMIF(G7:G100, "Selected", E7:E100)').setNumberFormat("Rp#,##0");
+  shRekap.getRange("B4").setValue("Remaining Budget:").setFontWeight("bold");
+  shRekap.getRange("C4").setFormula('=C2-C3').setNumberFormat("Rp#,##0");
+  
+  shRekap.getRange("A6:G6").setValues([["ID", "Kategori", "Nama Vendor", "Nama Paket", "Harga (Rp)", "Catatan Teknis", "Status"]]);
+  shRekap.getRange("A6:G6").setFontWeight("bold").setBackground("#f5f5f7").setFontColor("#1d1d1f");
+  shRekap.setFrozenRows(6);
+  
+  // Setup Sheet_Log
+  const shLog = tenantSS.insertSheet("Sheet_Log");
+  shLog.appendRow(['Tanggal', 'User', 'Aktivitas', 'Detail']);
+  shLog.getRange("A1:D1").setFontWeight("bold").setBackground("#7a7a7a").setFontColor("#ffffff");
+  shLog.setFrozenRows(1);
+  
+  // Bersihkan sheet bawaan kosong
+  const defSheet = tenantSS.getSheetByName("Sheet1");
+  if (defSheet) tenantSS.deleteSheet(defSheet);
+
+  // 2. Lahirkan Folder Penyimpanan Google Drive Terisolasi Baru
+  const driveRoot = getOrCreateFolder(DRIVE_ROOT_FOLDER_NAME);
+  const projectFolder = driveRoot.createFolder("Uploads_" + project.id);
+  const projectFolderId = projectFolder.getId();
+  projectFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  // 3. Tulis Metadata Hasil Provisioning ke Registry Pusat
+  projSheet.appendRow([
+    project.id,
+    project.name,
+    tenantSSId,
+    projectFolderId,
+    project.due_date,
+    project.gas_url || "",
+    new Date()
+  ]);
+
+  writeMasterLog(project.id, email, "PROVISION_TENANT", "Berhasil mencetak database terisolasi baru dan folder Drive untuk " + project.name);
+  return { success: true, message: "Infrastruktur cloud tenant berhasil dicetak otomatis!" };
 }
 
-function fetchProjectContextData(projectId) {
-  const tenant = getTenantContext(projectId);
-  const tenantSS = SpreadsheetApp.openById(tenant.spreadsheetId);
+// ==========================================================================
+// TENANT INTERACTION ROUTER HUB (Jembatan Pengetikan ke File Terpisah)
+// ==========================================================================
+
+function routeToIsolatedTenantDatabase(action, projectId, payload, email) {
+  const masterSS = SpreadsheetApp.getActiveSpreadsheet();
+  const projSheet = masterSS.getSheetByName(MASTER_REGISTRY.PROJECTS);
+  const data = projSheet.getDataRange().getValues();
   
-  // 1. Ambil budget limit dari Sheet_Rekap
-  const rekapSheet = tenantSS.getSheetByName("Sheet_Rekap");
-  const budgetLimit = parseInt(rekapSheet.getRange("C2").getValue()) || 100000000;
-  
-  // 2. Ambil data vendor dan payment dari Sheet_Utama
-  const utamaSheet = tenantSS.getSheetByName("Sheet_Utama");
-  const rawData = utamaSheet.getDataRange().getValues();
-  const vendors = [];
-  const payments = [];
-  
-  for (let i = 1; i < rawData.length; i++) {
-    const jenis = rawData[i][2]; // JenisData
-    const dataJsonStr = rawData[i][4]; // DataJSON
-    if (!dataJsonStr) continue;
-    
-    try {
-      const dataObj = JSON.parse(dataJsonStr);
-      if (jenis === "Vendor") {
-        vendors.push(dataObj);
-      } else if (jenis === "Payment") {
-        payments.push(dataObj);
-      }
-    } catch (e) {}
+  let tenantSpreadsheetId = "";
+  let tenantFolderId = "";
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === projectId) {
+      tenantSpreadsheetId = data[i][2];
+      tenantFolderId = data[i][3];
+      break;
+    }
   }
+
+  if (!tenantSpreadsheetId) {
+    return { success: false, message: "Error: Berkas database terisolasi untuk proyek ini tidak ditemukan." };
+  }
+
+  // Buka Spreadsheet terisolasi milik tenant secara dinamis
+  const tenantSS = SpreadsheetApp.openById(tenantSpreadsheetId);
+  const shUtama = tenantSS.getSheetByName("Sheet_Utama");
+  const shRekap = tenantSS.getSheetByName("Sheet_Rekap");
+  const shLog = tenantSS.getSheetByName("Sheet_Log");
+
+  const timestamp = new Date();
+
+  if (action === "addVendor") {
+    let finalImageUrl = "";
+    if (payload.brochure_img && payload.brochure_img.startsWith("data:")) {
+      const fileName = "Brosur_" + payload.category + "_" + payload.vendor_name.replace(/\s+/g, '_');
+      finalImageUrl = uploadBase64ToSpecificFolder(payload.brochure_img, fileName, tenantFolderId);
+    }
+
+    shUtama.appendRow([timestamp, payload.vendor_id, "VendorCatalog", "Active", JSON.stringify(payload), finalImageUrl, email, timestamp]);
+    shRekap.appendRow([payload.vendor_id, payload.category, payload.vendor_name, payload.package_name, payload.price, payload.notes, "Draft"]);
+    if (shLog) shLog.appendRow([timestamp, email, "ADD_VENDOR", "Menambahkan vendor draf: " + payload.vendor_name]);
+    return { success: true, brochure_url: finalImageUrl };
+  }
+
+  if (action === "updateVendorStatus") {
+    // Mutasi di Sheet Rekap (Kolom G) dan Sheet Utama
+    updateCellInSheet(shRekap, 0, payload.vendor_id, 6, payload.status);
+    updateCellInSheet(shUtama, 1, payload.vendor_id, 3, payload.status);
+    
+    if (payload.status === "Selected") {
+      // Rollback vendor lain di kategori yang sama menjadi Draft
+      const currentCat = getCategoryByVendorId(shRekap, payload.vendor_id);
+      const rekapRows = shRekap.getDataRange().getValues();
+      for (let j = 6; j < rekapRows.length; j++) {
+        if (rekapRows[j][1] === currentCat && rekapRows[j][0] !== payload.vendor_id && rekapRows[j][6] === "Selected") {
+          shRekap.getRange(j + 1, 7).setValue("Draft");
+          updateCellInSheet(shUtama, 1, rekapRows[j][0], 3, "Draft");
+        }
+      }
+    }
+    if (shLog) shLog.appendRow([timestamp, email, "UPDATE_STATUS", "Merubah komitmen status vendor " + payload.vendor_id + " menjadi " + payload.status]);
+    return { success: true };
+  }
+
+  if (action === "deleteVendor") {
+    removeRowsByColumnValue(shRekap, 0, payload.vendor_id);
+    removeRowsByColumnValue(shUtama, 1, payload.vendor_id);
+    // Hapus juga payment milestones yang terikat vendor ini
+    const shPayments = tenantSS.getSheetByName("Sheet_Payments") || tenantSS;
+    removeRowsByColumnValue(shPayments, 2, payload.vendor_id);
+    return { success: true };
+  }
+
+  if (action === "updateBudgetLimit") {
+    shRekap.getRange("C2").setValue(payload.limit);
+    if (shLog) shLog.appendRow([timestamp, email, "UPDATE_LIMIT", "Merubah target limit anggaran utama proyek menjadi Rp" + payload.limit]);
+    return { success: true };
+  }
+
+  if (action === "savePaymentTerm") {
+    let shPayments = tenantSS.getSheetByName("Sheet_Payments");
+    if (!shPayments) {
+      shPayments = tenantSS.insertSheet("Sheet_Payments");
+      shPayments.appendRow(["PaymentID", "ProjectID", "VendorID", "VendorName", "Stage", "Amount", "DueDate", "ProofURL", "Status"]);
+      shPayments.getRange("A1:I1").setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
+    }
+    
+    const payRows = shPayments.getDataRange().getValues();
+    let foundPayRow = -1;
+    for (let k = 1; k < payRows.length; k++) {
+      if (payRows[k][0] === payload.id) { foundPayRow = k + 1; break; }
+    }
+
+    if (foundPayRow !== -1) {
+      shPayments.getRange(foundPayRow, 3).setValue(payload.vendor_id);
+      shPayments.getRange(foundPayRow, 4).setValue(payload.vendor_name);
+      shPayments.getRange(foundPayRow, 5).setValue(payload.stage);
+      shPayments.getRange(foundPayRow, 6).setValue(payload.amount);
+      shPayments.getRange(foundPayRow, 7).setValue(payload.due_date);
+    } else {
+      shPayments.appendRow([payload.id, projectId, payload.vendor_id, payload.vendor_name, payload.stage, payload.amount, payload.due_date, payload.proof || "", payload.status || "Belum Dibayar"]);
+    }
+    return { success: true };
+  }
+
+  if (action === "deletePaymentTerm") {
+    const shPayments = tenantSS.getSheetByName("Sheet_Payments");
+    removeRowsByColumnValue(shPayments, 0, payload.id);
+    return { success: true };
+  }
+
+  if (action === "updatePaymentStatus") {
+    const shPayments = tenantSS.getSheetByName("Sheet_Payments");
+    const payRows = shPayments.getDataRange().getValues();
+    for (let m = 1; m < payRows.length; m++) {
+      if (payRows[m][0] === payload.id) {
+        shPayments.getRange(m + 1, 9).setValue(payload.status);
+        if (payload.proof_data && payload.proof_data.startsWith("data:")) {
+          const safeResiName = "Resi_" + payload.id + "_" + (payload.proof_name || "slip");
+          const proofUrl = uploadBase64ToSpecificFolder(payload.proof_data, safeResiName, tenantFolderId);
+          shPayments.getRange(m + 1, 8).setValue(proofUrl);
+        } else if (payload.status === "Belum Dibayar") {
+          shPayments.getRange(m + 1, 8).setValue("");
+        }
+        break;
+      }
+    }
+    return { success: true };
+  }
+
+  return { success: false, message: "Sub-route aksi internal proyek terisolasi tidak valid." };
+}
+
+// ==========================================================================
+// TWO-WAY DATA COMPILER READ SYNC
+// ==========================================================================
+
+function fetchProjectContextData(projectId) {
+  const masterSS = SpreadsheetApp.getActiveSpreadsheet();
+  const projSheet = masterSS.getSheetByName(MASTER_REGISTRY.PROJECTS);
+  const data = projSheet.getDataRange().getValues();
   
+  let tenantSpreadsheetId = "";
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === projectId) { tenantSpreadsheetId = data[i][2]; break; }
+  }
+
+  if (!tenantSpreadsheetId) {
+    return { success: false, message: "Gagal memuat konteks: Berkas database cloud kosong." };
+  }
+
+  const tenantSS = SpreadsheetApp.openById(tenantSpreadsheetId);
+  
+  // Parse Data Vendor dari Sheet_Rekap
+  const shRekap = tenantSS.getSheetByName("Sheet_Rekap");
+  const rawRekap = shRekap.getDataRange().getValues();
+  const vendors = [];
+  
+  const budgetLimit = parseInt(shRekap.getRange("C2").getValue()) || 100000000;
+
+  for (let j = 6; j < rawRekap.length; j++) {
+    if (rawRekap[j][0]) {
+      vendors.push({
+        vendor_id: rawRekap[j][0],
+        category: rawRekap[j][1],
+        vendor_name: rawRekap[j][2],
+        package_name: rawRekap[j][3],
+        price: parseInt(rawRekap[j][4]) || 0,
+        notes: rawRekap[j][5],
+        status: rawRekap[j][6],
+        brochure_img: getBrochureUrlFromUtama(tenantSS, rawRekap[j][0]),
+        drive_url: ""
+      });
+    }
+  }
+
+  // Parse Data Pembayaran dari Sheet_Payments jika ada
+  const shPayments = tenantSS.getSheetByName("Sheet_Payments");
+  const payments = [];
+  if (shPayments) {
+    const rawPays = shPayments.getDataRange().getValues();
+    for (let k = 1; k < rawPays.length; k++) {
+      if (rawPays[k][0]) {
+        payments.push({
+          id: rawPays[k][0],
+          vendor_id: rawPays[k][2],
+          vendor_name: rawPays[k][3],
+          stage: rawPays[k][4],
+          amount: parseInt(rawPays[k][5]) || 0,
+          due_date: rawPays[k][6] instanceof Date ? rawPays[k][6].toISOString().split('T')[0] : rawPays[k][6].toString(),
+          proof: rawPays[k][7],
+          status: rawPays[k][8]
+        });
+      }
+    }
+  }
+
   return {
     success: true,
     projectId: projectId,
-    projectName: tenant.projectName,
     budgetLimit: budgetLimit,
     vendors: vendors,
     payments: payments
   };
 }
 
-function insertVendor(vendor, projectId, email) {
-  const tenant = getTenantContext(projectId);
-  const tenantSS = SpreadsheetApp.openById(tenant.spreadsheetId);
-  
-  let finalImageUrl = "";
-  if (vendor.brochure_img && vendor.brochure_img.startsWith("data:")) {
-    const fileName = "Brosur_" + vendor.category + "_" + vendor.vendor_name.replace(/\s+/g, '_');
-    finalImageUrl = uploadBase64ToTenantFolder(vendor.brochure_img, fileName, tenant.folderId);
-    vendor.brochure_img = finalImageUrl;
-  } else {
-    finalImageUrl = vendor.brochure_img || "";
-  }
-
-  // Simpan ke Sheet_Utama (JSON storage)
-  const utamaSheet = tenantSS.getSheetByName("Sheet_Utama");
-  utamaSheet.appendRow([
-    new Date(),
-    vendor.vendor_id,
-    "Vendor",
-    vendor.status || "Draft",
-    JSON.stringify(vendor),
-    finalImageUrl,
-    email,
-    new Date()
-  ]);
-
-  // Simpan ke Sheet_Rekap (flat table)
-  const rekapSheet = tenantSS.getSheetByName("Sheet_Rekap");
-  rekapSheet.appendRow([
-    vendor.vendor_id,
-    vendor.category,
-    vendor.vendor_name,
-    vendor.package_name,
-    vendor.price,
-    vendor.notes,
-    vendor.status || "Draft"
-  ]);
-
-  writeTenantLog(tenantSS, projectId, email, "ADD_VENDOR", "Menambahkan alternatif vendor " + vendor.vendor_name + " ke draf.");
-  return { success: true, brochure_url: finalImageUrl };
-}
-
-function updateVendorStatus(vendorId, status, projectId, email) {
-  const tenant = getTenantContext(projectId);
-  const tenantSS = SpreadsheetApp.openById(tenant.spreadsheetId);
-  
-  const utamaSheet = tenantSS.getSheetByName("Sheet_Utama");
-  const rawUtama = utamaSheet.getDataRange().getValues();
-  
-  let targetCategory = "";
-  
-  // Update di Sheet_Utama
-  for (let i = 1; i < rawUtama.length; i++) {
-    if (rawUtama[i][1] === vendorId && rawUtama[i][2] === "Vendor") {
-      utamaSheet.getRange(i + 1, 4).setValue(status);
-      utamaSheet.getRange(i + 1, 8).setValue(new Date());
-      
-      try {
-        const vendorObj = JSON.parse(rawUtama[i][4]);
-        vendorObj.status = status;
-        utamaSheet.getRange(i + 1, 5).setValue(JSON.stringify(vendorObj));
-        targetCategory = vendorObj.category;
-      } catch(e){}
-      break;
-    }
-  }
-
-  // Jika statusnya Selected, kembalikan vendor lain di kategori yang sama menjadi Draft
-  if (status === "Selected" && targetCategory) {
-    for (let i = 1; i < rawUtama.length; i++) {
-      if (rawUtama[i][1] !== vendorId && rawUtama[i][2] === "Vendor") {
-        try {
-          const vObj = JSON.parse(rawUtama[i][4]);
-          if (vObj.category === targetCategory && vObj.status === "Selected") {
-            vObj.status = "Draft";
-            utamaSheet.getRange(i + 1, 4).setValue("Draft");
-            utamaSheet.getRange(i + 1, 5).setValue(JSON.stringify(vObj));
-          }
-        } catch(e){}
-      }
-    }
-  }
-
-  // Sinkronisasikan ulang detail table Sheet_Rekap
-  refreshRekapDetailTable(tenantSS);
-
-  writeTenantLog(tenantSS, projectId, email, "UPDATE_VENDOR_STATUS", "Mengubah status vendor " + vendorId + " menjadi " + status);
-  return { success: true };
-}
-
-function deleteVendor(vendorId, projectId, email) {
-  const tenant = getTenantContext(projectId);
-  const tenantSS = SpreadsheetApp.openById(tenant.spreadsheetId);
-  
-  const utamaSheet = tenantSS.getSheetByName("Sheet_Utama");
-  const rawUtama = utamaSheet.getDataRange().getValues();
-
-  // Hapus vendor
-  for (let i = rawUtama.length - 1; i >= 1; i--) {
-    if (rawUtama[i][1] === vendorId && rawUtama[i][2] === "Vendor") {
-      utamaSheet.deleteRow(i + 1);
-    }
-  }
-
-  // Cascade hapus termin pembayaran terkait
-  for (let j = rawUtama.length - 1; j >= 1; j--) {
-    if (rawUtama[j][2] === "Payment") {
-      try {
-        const pay = JSON.parse(rawUtama[j][4]);
-        if (pay.vendor_id === vendorId) {
-          utamaSheet.deleteRow(j + 1);
-        }
-      } catch(e){}
-    }
-  }
-
-  // Sinkronisasikan ulang detail table Sheet_Rekap
-  refreshRekapDetailTable(tenantSS);
-
-  writeTenantLog(tenantSS, projectId, email, "DELETE_VENDOR", "Menghapus vendor ID: " + vendorId);
-  return { success: true };
-}
-
-function updateBudgetLimit(limit, projectId, email) {
-  const tenant = getTenantContext(projectId);
-  const tenantSS = SpreadsheetApp.openById(tenant.spreadsheetId);
-  
-  const rekapSheet = tenantSS.getSheetByName("Sheet_Rekap");
-  rekapSheet.getRange("C2").setValue(limit);
-  
-  writeTenantLog(tenantSS, projectId, email, "UPDATE_BUDGET_LIMIT", "Merubah total alokasi dana limit proyek menjadi Rp" + limit);
-  return { success: true };
-}
-
-function savePaymentTerm(term, projectId, email) {
-  const tenant = getTenantContext(projectId);
-  const tenantSS = SpreadsheetApp.openById(tenant.spreadsheetId);
-  
-  const utamaSheet = tenantSS.getSheetByName("Sheet_Utama");
-  const rawUtama = utamaSheet.getDataRange().getValues();
-  let foundRow = -1;
-
-  for (let i = 1; i < rawUtama.length; i++) {
-    if (rawUtama[i][1] === term.id && rawUtama[i][2] === "Payment") {
-      foundRow = i + 1;
-      break;
-    }
-  }
-
-  if (foundRow !== -1) {
-    utamaSheet.getRange(foundRow, 4).setValue(term.status || "Belum Dibayar");
-    utamaSheet.getRange(foundRow, 5).setValue(JSON.stringify(term));
-    utamaSheet.getRange(foundRow, 8).setValue(new Date());
-    writeTenantLog(tenantSS, projectId, email, "UPDATE_PAYMENT_TERM", "Mengedit termin pembayaran " + term.id);
-  } else {
-    utamaSheet.appendRow([
-      new Date(),
-      term.id,
-      "Payment",
-      term.status || "Belum Dibayar",
-      JSON.stringify(term),
-      term.proof || "",
-      email,
-      new Date()
-    ]);
-    writeTenantLog(tenantSS, projectId, email, "ADD_PAYMENT_TERM", "Menjadwalkan rencana termin " + term.stage + " untuk " + term.vendor_name);
-  }
-  return { success: true };
-}
-
-function deletePaymentTerm(paymentId, projectId, email) {
-  const tenant = getTenantContext(projectId);
-  const tenantSS = SpreadsheetApp.openById(tenant.spreadsheetId);
-  
-  const utamaSheet = tenantSS.getSheetByName("Sheet_Utama");
-  const rawUtama = utamaSheet.getDataRange().getValues();
-
-  for (let i = rawUtama.length - 1; i >= 1; i--) {
-    if (rawUtama[i][1] === paymentId && rawUtama[i][2] === "Payment") {
-      utamaSheet.deleteRow(i + 1);
-      break;
-    }
-  }
-  writeTenantLog(tenantSS, projectId, email, "DELETE_PAYMENT_TERM", "Menghapus jadwal termin pembayaran " + paymentId);
-  return { success: true };
-}
-
-function updatePaymentStatus(paymentId, status, proofData, proofName, projectId, email) {
-  const tenant = getTenantContext(projectId);
-  const tenantSS = SpreadsheetApp.openById(tenant.spreadsheetId);
-  
-  const utamaSheet = tenantSS.getSheetByName("Sheet_Utama");
-  const rawUtama = utamaSheet.getDataRange().getValues();
-
-  for (let i = 1; i < rawUtama.length; i++) {
-    if (rawUtama[i][1] === paymentId && rawUtama[i][2] === "Payment") {
-      utamaSheet.getRange(i + 1, 4).setValue(status);
-      utamaSheet.getRange(i + 1, 8).setValue(new Date());
-      
-      try {
-        const pay = JSON.parse(rawUtama[i][4]);
-        pay.status = status;
-        
-        if (proofData && proofData.startsWith("data:")) {
-          const safeName = "Resi_" + paymentId + "_" + (proofName || "slip").replace(/\s+/g, '_');
-          const driveUrl = uploadBase64ToTenantFolder(proofData, safeName, tenant.folderId);
-          pay.proof_data = driveUrl;
-          utamaSheet.getRange(i + 1, 6).setValue(driveUrl);
-        } else if (status === "Belum Dibayar") {
-          pay.proof_data = "";
-          utamaSheet.getRange(i + 1, 6).setValue("");
-        }
-        
-        utamaSheet.getRange(i + 1, 5).setValue(JSON.stringify(pay));
-      } catch(e){}
-      break;
-    }
-  }
-  writeTenantLog(tenantSS, projectId, email, "VERIFY_PAYMENT", "Mengubah status verifikasi bayar " + paymentId + " menjadi " + status);
-  return { success: true };
-}
-
 // ==========================================================================
-// MASTER REGISTRY SUPERADMIN OPERATIONS
+// AUXILIARY SUBSYSTEMS & DATABASE REPAIR UTILITIES
 // ==========================================================================
 
-function loginUser(email, passcode) {
+function saveUserRoleToMaster(user, email) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const usersSheet = ss.getSheetByName("MasterUsers");
-  const rawUsers = usersSheet.getDataRange().getValues();
-  let matchedUserRow = null;
-  
-  for (let i = 1; i < rawUsers.length; i++) {
-    if (rawUsers[i][1].toString().toLowerCase() === email.toLowerCase() && rawUsers[i][3].toString() === passcode) {
-      matchedUserRow = {
-        projectId: rawUsers[i][0],
-        email: rawUsers[i][1],
-        role: rawUsers[i][2],
-        label: rawUsers[i][2] === "CLIENT_DECIDER" ? "Decider" : "Initiator",
-        token: rawUsers[i][3],
-        permissions: rawUsers[i][4] ? rawUsers[i][4].split(",") : []
-      };
-      break;
-    }
-  }
-  
-  if (!matchedUserRow) {
-    return { success: false, message: "Email atau token PIN salah." };
-  }
-  
-  const tenant = getTenantContext(matchedUserRow.projectId);
-  
-  // Muat semua user untuk project ini
-  const projectUsers = [];
-  for (let i = 1; i < rawUsers.length; i++) {
-    if (rawUsers[i][0] === matchedUserRow.projectId) {
-      projectUsers.push({
-        email: rawUsers[i][1],
-        role: rawUsers[i][2],
-        label: rawUsers[i][2] === "CLIENT_DECIDER" ? "Decider" : "Initiator",
-        token: rawUsers[i][3],
-        permissions: rawUsers[i][4] ? rawUsers[i][4].split(",") : []
-      });
-    }
-  }
-  
-  let budget = 100000000;
-  try {
-    const tenantSS = SpreadsheetApp.openById(tenant.spreadsheetId);
-    budget = tenantSS.getSheetByName("Sheet_Rekap").getRange("C2").getValue();
-  } catch(e){}
-  
-  return {
-    success: true,
-    user: matchedUserRow,
-    project: {
-      id: matchedUserRow.projectId,
-      name: tenant.projectName,
-      budget: budget,
-      gas_url: "",
-      users: projectUsers
-    }
-  };
-}
-
-function saveProjectToSheet(project, email) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const registrySheet = ss.getSheetByName("ProjectRegistry");
-  const rawRegistry = registrySheet.getDataRange().getValues();
-  let foundRow = -1;
-
-  for (let i = 1; i < rawRegistry.length; i++) {
-    if (rawRegistry[i][0] === project.id) { foundRow = i + 1; break; }
-  }
-
-  let spreadsheetId = "";
-  let folderId = "";
-
-  if (foundRow !== -1) {
-    registrySheet.getRange(foundRow, 2).setValue(project.name);
-    spreadsheetId = rawRegistry[foundRow - 1][2];
-    
-    // Update budget limit di file spreadsheet terisolasi
-    try {
-      const tenantSS = SpreadsheetApp.openById(spreadsheetId);
-      tenantSS.getSheetByName("Sheet_Rekap").getRange("C2").setValue(project.budget);
-    } catch(e){}
-  } else {
-    // Dynamic Provisioning database client baru
-    const tenant = provisionTenantDatabase(project.id, project.name);
-    spreadsheetId = tenant.spreadsheetId;
-    folderId = tenant.folderId;
-    
-    // Update budget limit di file spreadsheet terisolasi
-    try {
-      const tenantSS = SpreadsheetApp.openById(spreadsheetId);
-      tenantSS.getSheetByName("Sheet_Rekap").getRange("C2").setValue(project.budget);
-    } catch(e){}
-  }
-
-  writeMasterLog(project.id, email, "SAVE_PROJECT", "Mengonfigurasi data utama proyek tenant " + project.name);
-  return { success: true };
-}
-
-function deleteProjectFromSheet(projectId, email) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  removeRowsByColumnMatch(ss.getSheetByName("ProjectRegistry"), 0, projectId);
-  removeRowsByColumnMatch(ss.getSheetByName("MasterUsers"), 0, projectId);
-  writeMasterLog(projectId, email, "DELETE_PROJECT", "Menghapus proyek " + projectId + " dari registri.");
-  return { success: true };
-}
-
-function saveUserRoleToSheet(user, email) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("MasterUsers");
+  const sheet = ss.getSheetByName(MASTER_REGISTRY.USERS);
   const data = sheet.getDataRange().getValues();
   let foundRow = -1;
 
@@ -505,196 +417,135 @@ function saveUserRoleToSheet(user, email) {
   const perms = user.permissions.join(",");
   if (foundRow !== -1) {
     sheet.getRange(foundRow, 3).setValue(user.role);
-    sheet.getRange(foundRow, 4).setValue(user.token);
-    sheet.getRange(foundRow, 5).setValue(perms);
+    sheet.getRange(foundRow, 4).setValue(user.label);
+    sheet.getRange(foundRow, 5).setValue(user.token);
+    sheet.getRange(foundRow, 6).setValue(perms);
   } else {
-    sheet.appendRow([user.projectId, user.email, user.role, user.token, perms]);
+    sheet.appendRow([user.projectId, user.email, user.role, user.label, user.token, perms]);
   }
-  writeMasterLog(user.projectId, email, "SAVE_USER_ROLE", "Sinkronisasi otorisasi user " + user.email);
   return { success: true };
 }
 
-function deleteUserFromSheet(user, email) {
+function deleteUserFromMaster(user, email) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("MasterUsers");
-  const data = sheet.getDataRange().getValues();
-  for (let i = data.length - 1; i >= 1; i--) {
-    if (data[i][0] === user.projectId && data[i][1] === user.email) { sheet.deleteRow(i + 1); }
-  }
-  writeMasterLog(user.projectId, email, "DELETE_USER", "Mencabut hak kolaborasi user " + user.email);
+  const sheet = ss.getSheetByName(MASTER_REGISTRY.USERS);
+  removeRowsByColumnMatchTwoCriteria(sheet, 0, user.projectId, 1, user.email);
   return { success: true };
 }
 
-// ==========================================================================
-// STORAGE & UTILITIES
-// ==========================================================================
+function executeCascadeDeleteTenant(projectId, email) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const projSheet = ss.getSheetByName(MASTER_REGISTRY.PROJECTS);
+  const data = projSheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === projectId) {
+      const targetSSId = data[i][2];
+      const targetFolderId = data[i][3];
+      
+      // Hapus file Google Sheets terisolasi dan folder Drive dari Cloud
+      try { DriveApp.getFileById(targetSSId).setTrashed(true); } catch(e){}
+      try { DriveApp.getFolderById(targetFolderId).setTrashed(true); } catch(e){}
+      
+      projSheet.deleteRow(i + 1);
+      break;
+    }
+  }
+  
+  removeRowsByColumnValue(ss.getSheetByName(MASTER_REGISTRY.USERS), 0, projectId);
+  writeMasterLog(projectId, email, "CASCADE_DELETE", "Menghapus ekosistem database terisolasi proyek " + projectId);
+  return { success: true };
+}
 
-function uploadBase64ToTenantFolder(base64Data, fileName, folderId) {
+function uploadBase64ToSpecificFolder(base64Data, fileName, folderId) {
   const parts = base64Data.split(',');
   const mimeType = parts[0].match(/:(.*?);/)[1];
-  const decodedBlob = Utilities.newBlob(Utilities.base64Decode(parts[1]), mimeType, fileName);
-  
+  const blob = Utilities.newBlob(Utilities.base64Decode(parts[1]), mimeType, fileName);
   const folder = DriveApp.getFolderById(folderId);
-  const file = folder.createFile(decodedBlob);
+  const file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   return file.getUrl();
 }
 
-function writeMasterLog(projectId, user, action, details) {
+function getBrochureUrlFromUtama(tenantSS, vendorId) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let logSheet = ss.getSheetByName("AURA_Logs");
-    if (!logSheet) {
-      logSheet = ss.insertSheet("AURA_Logs");
-      logSheet.appendRow(["Timestamp", "ProjectID", "User", "Action", "Details"]);
-      logSheet.getRange("A1:E1").setFontWeight("bold").setBackground("#7a7a7a").setFontColor("#ffffff");
+    const shUtama = tenantSS.getSheetByName("Sheet_Utama");
+    const data = shUtama.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === vendorId) return data[i][5]; // Kolom FileURL
     }
-    logSheet.appendRow([new Date(), projectId, user, action, details]);
   } catch(e){}
+  return "";
 }
 
-function writeTenantLog(tenantSS, projectId, user, action, details) {
-  try {
-    tenantSS.getSheetByName("Sheet_Log").appendRow([new Date(), projectId, user, action, details]);
-  } catch(e){}
+function getCategoryByVendorId(shRekap, vendorId) {
+  const rows = shRekap.getDataRange().getValues();
+  for (let i = 6; i < rows.length; i++) {
+    if (rows[i][0] === vendorId) return rows[i][1];
+  }
+  return "";
 }
 
-function removeRowsByColumnMatch(sheet, colIdx, val) {
+function updateCellInSheet(sheet, matchCol, matchVal, targetCol, newVal) {
+  if (!sheet) return;
+  const data = sheet.getDataRange().getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][matchCol] === matchVal) {
+      sheet.getRange(i + 1, targetCol + 1).setValue(newVal);
+      break;
+    }
+  }
+}
+
+function removeRowsByColumnValue(sheet, colIdx, val) {
+  if (!sheet) return;
+  const data = sheet.getDataRange().getValues();
+  for (let i = data.length - 1; i >= 0; i--) {
+    if (data[i][colIdx] === val) sheet.deleteRow(i + 1);
+  }
+}
+
+function removeRowsByColumnMatchTwoCriteria(sheet, col1, val1, col2, val2) {
   if (!sheet) return;
   const data = sheet.getDataRange().getValues();
   for (let i = data.length - 1; i >= 1; i--) {
-    if (data[i][colIdx] === val) { sheet.deleteRow(i + 1); }
+    if (data[i][col1] === val1 && data[i][col2] === val2) sheet.deleteRow(i + 1);
   }
 }
 
-function formatDateString(dateVal) {
-  if (!dateVal) return "";
-  if (dateVal instanceof Date) {
-    return dateVal.toISOString().split('T')[0];
-  }
-  return dateVal.toString().split('T')[0];
+function getOrCreateFolder(name) {
+  const folders = DriveApp.getFoldersByName(name);
+  return folders.hasNext() ? folders.next() : DriveApp.createFolder(name);
 }
 
-function refreshRekapDetailTable(tenantSS) {
-  const rekapSheet = tenantSS.getSheetByName("Sheet_Rekap");
-  const lastRow = rekapSheet.getLastRow();
-  
-  if (lastRow >= 7) {
-    rekapSheet.deleteRows(7, lastRow - 6);
-  }
-  
-  const utamaSheet = tenantSS.getSheetByName("Sheet_Utama");
-  const rawUtama = utamaSheet.getDataRange().getValues();
-  
-  for (let i = 1; i < rawUtama.length; i++) {
-    if (rawUtama[i][2] === "Vendor") {
-      try {
-        const v = JSON.parse(rawUtama[i][4]);
-        rekapSheet.appendRow([
-          v.vendor_id,
-          v.category,
-          v.vendor_name,
-          v.package_name,
-          v.price,
-          v.notes,
-          v.status
-        ]);
-      } catch(e){}
-    }
-  }
+function writeMasterLog(projId, user, action, details) {
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MASTER_REGISTRY.LOGS)
+      .appendRow([new Date(), projId, user, action, details]);
+  } catch(e){}
 }
 
-// ==========================================================================
-// AUTOMATIC DATABASE SCHEMATIC INITIALIZER
-// ==========================================================================
-
-function setupDatabase() {
+function setupMasterRegistry() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  // 1. Setup ProjectRegistry
-  if (!ss.getSheetByName("ProjectRegistry")) {
-    const sh = ss.insertSheet("ProjectRegistry");
-    sh.appendRow(["project_id", "project_name", "spreadsheet_id", "folder_id", "created_at"]);
-    sh.getRange("A1:E1").setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
+  if (!ss.getSheetByName(MASTER_REGISTRY.PROJECTS)) {
+    const sh = ss.insertSheet(MASTER_REGISTRY.PROJECTS);
+    sh.appendRow(["ProjectID", "ProjectName", "SpreadsheetID", "FolderID", "H_Day", "GAS_URL", "CreatedAt"]);
+    sh.getRange("A1:G1").setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
+    sh.setFrozenRows(1);
   }
-
-  // 2. Setup MasterUsers
-  if (!ss.getSheetByName("MasterUsers")) {
-    const sh = ss.insertSheet("MasterUsers");
-    sh.appendRow(["project_id", "email", "role", "passcode_token", "permissions"]);
-    sh.getRange("A1:E1").setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
+  if (!ss.getSheetByName(MASTER_REGISTRY.USERS)) {
+    const sh = ss.insertSheet(MASTER_REGISTRY.USERS);
+    sh.appendRow(["ProjectID", "Email", "Role", "Label", "Token", "Permissions"]);
+    sh.getRange("A1:F1").setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
+    sh.setFrozenRows(1);
     
-    // Seed default users
-    sh.appendRow(["WD-AURA-001", "rachel.adriana@gmail.com", "CLIENT_DECIDER", "2027", "Vendor,Budget,Milestone,Verify"]);
-    sh.appendRow(["WD-AURA-001", "kevin.pradana@gmail.com", "CLIENT_INITIATOR", "2027", "Vendor"]);
-    sh.appendRow(["WD-AURA-002", "tama.decider@sg-corp.com", "CLIENT_DECIDER", "270327", "Vendor,Budget,Milestone,Verify"]);
-    sh.appendRow(["WD-AURA-002", "indah.adr@gmail.com", "CLIENT_INITIATOR", "270327", "Vendor"]);
+    // Seed kredensial superadmin bypass
+    sh.appendRow(["GLOBAL", "admin@aura.com", "SUPERADMIN", "Console Admin", "admin123", "Vendor,Budget,Milestone,Verify"]);
   }
-
-  // Hapus sheet bawaan "Sheet1" jika ada
-  const defaultSheet = ss.getSheetByName("Sheet1");
-  if (defaultSheet) {
-    try {
-      ss.deleteSheet(defaultSheet);
-    } catch(e){}
+  if (!ss.getSheetByName(MASTER_REGISTRY.LOGS)) {
+    const sh = ss.insertSheet(MASTER_REGISTRY.LOGS);
+    sh.appendRow(["Timestamp", "ProjectID", "User", "Action", "Details"]);
+    sh.getRange("A1:E1").setFontWeight("bold").setBackground("#7a7a7a").setFontColor("#ffffff");
+    sh.setFrozenRows(1);
   }
-}
-
-function provisionTenantDatabase(projectId, projectName) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const registrySheet = ss.getSheetByName("ProjectRegistry");
-  
-  // 1. Buat Spreadsheet Google Sheets Baru
-  const newSS = SpreadsheetApp.create("AURA_Database_" + projectId);
-  const spreadsheetId = newSS.getId();
-  
-  // 2. Setup Sheet_Utama
-  const shUtama = newSS.getActiveSheet();
-  shUtama.setName("Sheet_Utama");
-  shUtama.appendRow(["Timestamp", "ID", "JenisData", "Status", "DataJSON", "FileURL", "CreatedBy", "UpdatedAt"]);
-  shUtama.getRange("A1:H1").setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
-  
-  // 3. Setup Sheet_Rekap
-  const shRekap = newSS.insertSheet("Sheet_Rekap");
-  shRekap.getRange("B1").setValue("AURA MOTHERBOARD BUDGET DASHBOARD").setFontWeight("bold").setFontSize(12);
-  shRekap.getRange("B2").setValue("Total Budget Limit:");
-  shRekap.getRange("C2").setValue(100000000).setNumberFormat("Rp#,##0");
-  shRekap.getRange("B3").setValue("Current Selected Spending:");
-  shRekap.getRange("C3").setFormula('=SUMIF(G7:G100, "Selected", E7:E100)').setNumberFormat("Rp#,##0");
-  shRekap.getRange("B4").setValue("Remaining Budget:");
-  shRekap.getRange("C4").setFormula("=C2-C3").setNumberFormat("Rp#,##0");
-  
-  shRekap.getRange("B1:C4").setBackground("#f5f5f7");
-  shRekap.getRange("B2:B4").setFontWeight("bold");
-  shRekap.getRange("C2:C4").setFontWeight("bold").setFontColor("#0066cc");
-  
-  shRekap.appendRow([]); // Row 5 empty
-  shRekap.appendRow(["ID", "Kategori", "Nama Vendor", "Nama Paket", "Harga (Rp)", "Catatan Teknis", "Status"]);
-  shRekap.getRange("A6:G6").setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
-  
-  // 4. Setup Sheet_Log
-  const shLog = newSS.insertSheet("Sheet_Log");
-  shLog.appendRow(["Timestamp", "ProjectID", "User", "Action", "Details"]);
-  shLog.getRange("A1:E1").setFontWeight("bold").setBackground("#7a7a7a").setFontColor("#ffffff");
-  
-  // 5. Setup Folder Google Drive Baru
-  const rootFolders = DriveApp.getFoldersByName(DRIVE_ROOT_FOLDER_NAME);
-  const masterFolder = rootFolders.hasNext() ? rootFolders.next() : DriveApp.createFolder(DRIVE_ROOT_FOLDER_NAME);
-  
-  const tenantFolder = masterFolder.createFolder("Uploads_" + projectId);
-  const folderId = tenantFolder.getId();
-  
-  // Pindahkan spreadsheet baru ke folder master agar rapi
-  const file = DriveApp.getFileById(spreadsheetId);
-  masterFolder.addFile(file);
-  DriveApp.getRootFolder().removeFile(file);
-  
-  // 6. Simpan Metadata ke Registry
-  registrySheet.appendRow([projectId, projectName, spreadsheetId, folderId, new Date()]);
-  
-  return {
-    spreadsheetId: spreadsheetId,
-    folderId: folderId,
-    projectName: projectName
-  };
 }

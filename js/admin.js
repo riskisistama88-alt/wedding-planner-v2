@@ -320,15 +320,16 @@ function submitProject(e) {
   }
 
   localStorage.setItem("AURA_PROJECTS", JSON.stringify(projects));
+  
+  // Sync with Cloud
+  if (projectToSync) {
+    syncAdminOperationToCloud("saveProject", projectToSync);
+  }
+
   calculateStats();
   renderProjects();
   renderRoles();
   closeAddProjectModal();
-
-  // Sync with GAS
-  if (projectToSync && projectToSync.gas_url) {
-    syncProjectWithGAS(projectToSync.gas_url, "saveProject", projectToSync);
-  }
 }
 
 function editProject(projectId) {
@@ -371,10 +372,8 @@ function deleteProject(projectId) {
       renderRoles();
       showToast("Proyek berhasil dihapus.");
 
-      // Sync with GAS
-      if (gas) {
-        syncProjectWithGAS(gas, "deleteProject", { id: projectId });
-      }
+      // Sync with Cloud
+      syncAdminOperationToCloud("deleteProject", { id: projectId });
     }
   );
 }
@@ -499,22 +498,21 @@ function submitUser(e) {
   }
 
   localStorage.setItem("AURA_PROJECTS", JSON.stringify(projects));
+
+  // Sync with Cloud
+  const userPayload = {
+    projectId: p.id,
+    email: userData.email,
+    role: userData.role,
+    label: userData.label,
+    token: userData.token,
+    permissions: userData.permissions
+  };
+  syncAdminOperationToCloud("saveUserRole", userPayload);
+
   calculateStats();
   renderRoles();
   closeAddUserModal();
-
-  // Sync with GAS
-  if (p.gas_url) {
-    const payload = {
-      projectId: p.id,
-      email: userData.email,
-      role: userData.role,
-      label: userData.label,
-      token: userData.token,
-      permissions: userData.permissions
-    };
-    syncProjectWithGAS(p.gas_url, "saveUserRole", payload);
-  }
 }
 
 function editUser(email) {
@@ -558,10 +556,8 @@ function deleteUser(email) {
       renderRoles();
       showToast("Peran berhasil dihapus.");
 
-      // Sync with GAS
-      if (gas) {
-        syncProjectWithGAS(gas, "deleteUserRole", { projectId: p.id, email: email });
-      }
+      // Sync with Cloud
+      syncAdminOperationToCloud("deleteUserRole", { projectId: p.id, email: email });
     }
   );
 }
@@ -669,4 +665,12 @@ async function syncProjectWithGAS(url, action, payload) {
     console.error("Gagal sinkronisasi admin ke cloud:", err);
     showToast("⚠️ Gagal terhubung ke server GAS. Pastikan URL deployment aktif dan akses diatur ke 'Anyone'.");
   }
+}
+
+// Fungsi pembantu sinkronisasi superadmin ke cloud
+async function syncAdminOperationToCloud(actionType, payloadData) {
+  const defaultGasUrl = localStorage.getItem("AURA_GAS_URL_WD-AURA-001") || DEFAULT_GAS_URL;
+  if (!defaultGasUrl) return;
+
+  await syncProjectWithGAS(defaultGasUrl, actionType, payloadData);
 }
