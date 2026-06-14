@@ -85,6 +85,7 @@ let database = [];
 let budgetLimit = 100000000;
 let gasUrl = "";
 let geminiApiKey = "";
+let editingVendorId = null; // tracking vendor yang sedang diedit
 
 // Multi-Tenant Scoping
 let activeProjectId = localStorage.getItem("AURA_ACTIVE_PROJECT_ID") || "WD-AURA-001";
@@ -886,6 +887,18 @@ function openVendorDetail(vendorId) {
   const v = database.find(item => item.vendor_id === vendorId);
   if (!v) return;
 
+  // Set click handler untuk tombol Edit
+  const editBtn = document.getElementById("btn-edit-vendor");
+  if (editBtn) {
+    // Sembunyikan tombol Edit jika role/izin tidak mencukupi (misal: CLIENT_INITIATOR hanya bisa lihat)
+    if (permissions.includes("Vendor")) {
+      editBtn.classList.remove("hidden");
+      editBtn.onclick = () => openEditVendorForm(v.vendor_id);
+    } else {
+      editBtn.classList.add("hidden");
+    }
+  }
+
   // Populate text details
   document.getElementById("detail-badge").innerText = v.category;
   document.getElementById("detail-name").innerText = v.vendor_name;
@@ -1160,6 +1173,40 @@ function submitNewVendor(e) {
   
   const driveUrl = document.getElementById("form-drive-url").value.trim();
 
+  // Mode Edit / Update
+  if (editingVendorId) {
+    const idx = database.findIndex(v => v.vendor_id === editingVendorId);
+    if (idx !== -1) {
+      const oldDatabase = JSON.parse(JSON.stringify(database));
+      
+      database[idx].category = document.getElementById("form-category").value;
+      database[idx].vendor_name = document.getElementById("form-name").value;
+      database[idx].package_name = document.getElementById("form-package").value;
+      database[idx].price = parseInt(document.getElementById("form-price").value) || 0;
+      database[idx].notes = document.getElementById("form-notes").value;
+      database[idx].drive_url = driveUrl || "";
+      database[idx].brochure_img = uploadedBrochureBase64 || "";
+
+      localStorage.setItem(`AURA_VENDORS_DB_${activeProjectId}`, JSON.stringify(database));
+      
+      calculateMotherboardBudget();
+      renderVendors();
+      checkGeminiTrigger();
+      
+      // Muat ulang tampilan detail di samping agar ter-update
+      openVendorDetail(editingVendorId);
+      
+      closeAddVendorModal();
+      showToast("Informasi vendor berhasil diperbarui!");
+
+      if (gasUrl) {
+        syncWithGAS("updateVendor", database[idx], oldDatabase);
+      }
+    }
+    return;
+  }
+
+  // Mode Tambah Baru (Create)
   const newVendor = {
     vendor_id: `VND-${document.getElementById("form-category").value.substring(0,3).toUpperCase()}-${Date.now().toString().slice(-4)}`,
     category: document.getElementById("form-category").value,
@@ -1248,13 +1295,19 @@ async function syncWithGAS(action, payload, oldData = null) {
       if (result.success) {
         updateSyncStatus();
         showToast("Database cloud berhasil disinkronkan!");
-        // If it was a vendor upload, and returned brochure_url, update it!
-        if (result.brochure_url && action === "addVendor") {
+        // If it was a vendor upload or update, and returned brochure_url, update it!
+        if (result.brochure_url && (action === "addVendor" || action === "updateVendor")) {
           const idx = database.findIndex(v => v.vendor_id === payload.vendor_id);
           if (idx !== -1) {
             database[idx].brochure_img = result.brochure_url;
             localStorage.setItem(`AURA_VENDORS_DB_${activeProjectId}`, JSON.stringify(database));
             renderVendors();
+            
+            // Reload the detail panel with the final Drive link (if it is currently open)
+            const detailSheet = document.getElementById("vendor-detail-sheet");
+            if (detailSheet && !detailSheet.classList.contains("hidden")) {
+              openVendorDetail(payload.vendor_id);
+            }
           }
         }
       } else {
@@ -1284,6 +1337,26 @@ async function syncWithGAS(action, payload, oldData = null) {
    MODALS & DIALOGS CONTROLLER (Pure Touch Friendly Style)
    ========================================================================== */
 function openAddVendorModal() {
+  // Reset just in case there's any residual state from editing
+  editingVendorId = null;
+  document.querySelector("#add-vendor-modal h3").innerText = "Tambah Vendor Baru";
+  document.querySelector("#add-vendor-modal button[type='submit']").innerText = "Simpan Draft";
+  document.getElementById("add-vendor-form").reset();
+  uploadedBrochureBase64 = "";
+  
+  const previewText = document.getElementById("brochure-preview-text");
+  const thumbnail = document.getElementById("brochure-thumbnail");
+  const icon = document.getElementById("brochure-upload-icon");
+  if (previewText) previewText.innerText = "Pilih foto/brosur PDF (atau kosongkan untuk acak)";
+  if (thumbnail) {
+    thumbnail.src = "";
+    thumbnail.classList.add("hidden");
+  }
+  if (icon) {
+    icon.className = "fa-regular fa-image text-gray-400 text-sm";
+    icon.classList.remove("hidden");
+  }
+
   const m = document.getElementById("add-vendor-modal");
   m.classList.remove("hidden");
 }
@@ -1291,18 +1364,88 @@ function openAddVendorModal() {
 function closeAddVendorModal() {
   document.getElementById("add-vendor-modal").classList.add("hidden");
   
+  // Kembalikan judul modal dan teks submit button ke default
+  document.querySelector("#add-vendor-modal h3").innerText = "Tambah Vendor Baru";
+  document.querySelector("#add-vendor-modal button[type='submit']").innerText = "Simpan Draft";
+  
+  editingVendorId = null;
+
   // Reset form and file previews
   document.getElementById("add-vendor-form").reset();
   uploadedBrochureBase64 = "";
   const previewText = document.getElementById("brochure-preview-text");
   const thumbnail = document.getElementById("brochure-thumbnail");
   const icon = document.getElementById("brochure-upload-icon");
-  if (previewText) previewText.innerText = "Pilih foto brosur (atau kosongkan untuk acak)";
+  if (previewText) previewText.innerText = "Pilih foto/brosur PDF (atau kosongkan untuk acak)";
   if (thumbnail) {
     thumbnail.src = "";
     thumbnail.classList.add("hidden");
   }
-  if (icon) icon.classList.remove("hidden");
+  if (icon) {
+    icon.className = "fa-regular fa-image text-gray-400 text-sm";
+    icon.classList.remove("hidden");
+  }
+}
+
+function openEditVendorForm(vendorId) {
+  const v = database.find(item => item.vendor_id === vendorId);
+  if (!v) return;
+
+  editingVendorId = vendorId;
+
+  // Pre-fill form fields
+  document.getElementById("form-category").value = v.category;
+  document.getElementById("form-name").value = v.vendor_name;
+  document.getElementById("form-package").value = v.package_name;
+  document.getElementById("form-price").value = v.price;
+  document.getElementById("form-notes").value = v.notes;
+  document.getElementById("form-drive-url").value = v.drive_url || "";
+
+  // Handle preview file display
+  const previewText = document.getElementById("brochure-preview-text");
+  const thumbnail = document.getElementById("brochure-thumbnail");
+  const icon = document.getElementById("brochure-upload-icon");
+
+  if (v.brochure_img) {
+    uploadedBrochureBase64 = v.brochure_img; // Tetap gunakan gambar lama jika tidak diupload baru
+    if (previewText) previewText.innerText = "Brosur Terlampir (Klik untuk mengganti)";
+    
+    const isPdf = v.brochure_img.startsWith("data:application/pdf") || 
+                  v.brochure_img.endsWith("#pdf") || 
+                  v.brochure_img.includes(".pdf");
+                  
+    if (isPdf) {
+      if (thumbnail) thumbnail.classList.add("hidden");
+      if (icon) {
+        icon.className = "fa-regular fa-file-pdf text-red-600 text-sm";
+        icon.classList.remove("hidden");
+      }
+    } else {
+      if (thumbnail) {
+        thumbnail.src = getDirectDriveImageUrl(v.brochure_img);
+        thumbnail.classList.remove("hidden");
+      }
+      if (icon) {
+        icon.className = "fa-regular fa-image text-gray-400 text-sm";
+        icon.classList.add("hidden");
+      }
+    }
+  } else {
+    uploadedBrochureBase64 = "";
+    if (previewText) previewText.innerText = "Pilih foto/brosur PDF (atau kosongkan untuk acak)";
+    if (thumbnail) thumbnail.classList.add("hidden");
+    if (icon) {
+      icon.className = "fa-regular fa-image text-gray-400 text-sm";
+      icon.classList.remove("hidden");
+    }
+  }
+
+  // Ganti title modal & text tombol submit
+  document.querySelector("#add-vendor-modal h3").innerText = "Edit Informasi Vendor";
+  document.querySelector("#add-vendor-modal button[type='submit']").innerText = "Simpan Perubahan";
+
+  // Buka modal
+  document.getElementById("add-vendor-modal").classList.remove("hidden");
 }
 
 function openConfigModal() {

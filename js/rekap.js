@@ -428,29 +428,31 @@ function triggerFileUpload(termId) {
 
     const reader = new FileReader();
     reader.onload = function(event) {
-      const base64String = event.target.result;
-      
-      const idx = payments.findIndex(p => p.id === termId);
-      if (idx !== -1) {
-        const oldPayments = JSON.parse(JSON.stringify(payments));
-        payments[idx].proof = file.name;
-        payments[idx].proof_data = base64String;
-        payments[idx].status = "Menunggu Verifikasi";
-        
-        localStorage.setItem(`AURA_PAYMENTS_${activeProjectId}`, JSON.stringify(payments));
-        calculateMetrics();
-        renderPayments();
-        showToast("Bukti pembayaran berhasil diunggah!");
+      const rawBase64 = event.target.result;
+      compressBase64Image(rawBase64, 600, 600, 0.6, function(compressedBase64) {
+        const base64String = compressedBase64;
+        const idx = payments.findIndex(p => p.id === termId);
+        if (idx !== -1) {
+          const oldPayments = JSON.parse(JSON.stringify(payments));
+          payments[idx].proof = file.name;
+          payments[idx].proof_data = base64String;
+          payments[idx].status = "Menunggu Verifikasi";
+          
+          localStorage.setItem(`AURA_PAYMENTS_${activeProjectId}`, JSON.stringify(payments));
+          calculateMetrics();
+          renderPayments();
+          showToast("Bukti pembayaran berhasil diunggah!");
 
-        if (gasUrl) {
-          syncPaymentTermWithGAS("updatePaymentStatus", {
-            id: termId,
-            status: "Menunggu Verifikasi",
-            proof_data: base64String,
-            proof_name: file.name
-          }, oldPayments);
+          if (gasUrl) {
+            syncPaymentTermWithGAS("updatePaymentStatus", {
+              id: termId,
+              status: "Menunggu Verifikasi",
+              proof_data: base64String,
+              proof_name: file.name
+            }, oldPayments);
+          }
         }
-      }
+      });
     };
     reader.readAsDataURL(file);
   };
@@ -465,32 +467,34 @@ function handleModalFileUpload(e) {
 
   const reader = new FileReader();
   reader.onload = function(event) {
-    const base64String = event.target.result;
-    
-    const idx = payments.findIndex(p => p.id === selectedTermId);
-    if (idx !== -1) {
-      const oldPayments = JSON.parse(JSON.stringify(payments));
-      payments[idx].proof = file.name;
-      payments[idx].proof_data = base64String;
-      payments[idx].status = "Menunggu Verifikasi";
-      
-      localStorage.setItem(`AURA_PAYMENTS_${activeProjectId}`, JSON.stringify(payments));
-      calculateMetrics();
-      renderPayments();
-      showToast("Bukti pembayaran diunggah!");
-      
-      // Rerender modal view
-      openProofModal(selectedTermId);
+    const rawBase64 = event.target.result;
+    compressBase64Image(rawBase64, 600, 600, 0.6, function(compressedBase64) {
+      const base64String = compressedBase64;
+      const idx = payments.findIndex(p => p.id === selectedTermId);
+      if (idx !== -1) {
+        const oldPayments = JSON.parse(JSON.stringify(payments));
+        payments[idx].proof = file.name;
+        payments[idx].proof_data = base64String;
+        payments[idx].status = "Menunggu Verifikasi";
+        
+        localStorage.setItem(`AURA_PAYMENTS_${activeProjectId}`, JSON.stringify(payments));
+        calculateMetrics();
+        renderPayments();
+        showToast("Bukti pembayaran diunggah!");
+        
+        // Rerender modal view
+        openProofModal(selectedTermId);
 
-      if (gasUrl) {
-        syncPaymentTermWithGAS("updatePaymentStatus", {
-          id: selectedTermId,
-          status: "Menunggu Verifikasi",
-          proof_data: base64String,
-          proof_name: file.name
-        }, oldPayments);
+        if (gasUrl) {
+          syncPaymentTermWithGAS("updatePaymentStatus", {
+            id: selectedTermId,
+            status: "Menunggu Verifikasi",
+            proof_data: base64String,
+            proof_name: file.name
+          }, oldPayments);
+        }
       }
-    }
+    });
   };
   reader.readAsDataURL(file);
 }
@@ -1086,6 +1090,40 @@ function getDirectDriveImageUrl(url) {
     }
   }
   return url;
+}
+
+function compressBase64Image(base64Str, maxWidth, maxHeight, quality, callback) {
+  if (!base64Str || !base64Str.startsWith("data:")) {
+    callback(base64Str);
+    return;
+  }
+  const img = new Image();
+  img.onload = function() {
+    let width = img.width;
+    let height = img.height;
+    if (width > height) {
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+    } else {
+      if (height > maxHeight) {
+        width = Math.round((width * maxHeight) / height);
+        height = maxHeight;
+      }
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, width, height);
+    const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+    callback(compressedBase64);
+  };
+  img.onerror = function() {
+    callback(base64Str);
+  };
+  img.src = base64Str;
 }
 
 /* ==========================================================================

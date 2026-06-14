@@ -362,14 +362,19 @@
         <div id="vendor-detail-panel" class="slide-over-enter pointer-events-auto w-screen max-w-2xl bg-white apple-shadow flex flex-col h-full rounded-t-3xl sm:rounded-l-3xl sm:rounded-tr-none">
           
           <!-- Header -->
-          <div class="px-6 py-5 border-b border-apple-hairline flex items-center justify-between bg-apple-parchment/40 backdrop-blur-md">
+          <div class="flex items-center justify-between px-6 pb-4 border-b border-apple-hairline pt-6">
             <div class="flex items-center gap-2">
-              <span id="detail-badge" class="bg-apple-primary text-white text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider">Venue</span>
-              <span id="detail-status-badge" class="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider flex items-center gap-1">Selected</span>
+              <span id="detail-badge" class="bg-blue-50 text-blue-600 border border-blue-200 rounded-full px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">VENUE</span>
+              <span id="detail-status-badge" class="text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider flex items-center gap-1">Selected</span>
             </div>
-            <button onclick="closeVendorDetail()" class="text-apple-ink hover:text-apple-muted48 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center">
-              <i class="fa-solid fa-xmark text-lg"></i>
-            </button>
+            <div class="flex items-center gap-1">
+              <button id="btn-edit-vendor" class="text-apple-muted48 hover:text-apple-ink w-9 h-9 rounded-full bg-apple-parchment flex items-center justify-center transition-colors no-print" title="Edit Vendor">
+                <i class="fa-solid fa-pencil text-xs"></i>
+              </button>
+              <button onclick="closeVendorDetail()" class="text-apple-ink hover:text-apple-muted48 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center">
+                <i class="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
           </div>
 
           <!-- Scrollable Immersive Content -->
