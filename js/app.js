@@ -894,17 +894,39 @@ function openVendorDetail(vendorId) {
   document.getElementById("detail-placeholder-letter").innerText = v.category.substring(0,3).toUpperCase();
   document.getElementById("detail-notes").innerText = v.notes;
 
-  // Populate brochure image
+  // Populate brochure image or PDF viewer
   const brochureImgEl = document.getElementById("detail-brochure-img");
   const placeholderContainer = document.getElementById("detail-placeholder-container");
+  const pdfContainer = document.getElementById("detail-pdf-container");
+  const pdfLink = document.getElementById("detail-pdf-link");
+
+  // Reset views
+  if (pdfContainer) pdfContainer.classList.add("hidden");
+  if (brochureImgEl) brochureImgEl.classList.add("hidden");
+  if (placeholderContainer) placeholderContainer.classList.remove("hidden");
 
   if (v.brochure_img) {
-    if (brochureImgEl) {
-      brochureImgEl.src = getDirectDriveImageUrl(v.brochure_img);
-      brochureImgEl.classList.remove("hidden");
-    }
-    if (placeholderContainer) {
-      placeholderContainer.classList.add("hidden");
+    if (placeholderContainer) placeholderContainer.classList.add("hidden");
+    
+    const isPdf = v.brochure_img.startsWith("data:application/pdf") || 
+                  v.brochure_img.endsWith("#pdf") || 
+                  v.brochure_img.includes(".pdf");
+                  
+    if (isPdf) {
+      if (pdfContainer && pdfLink) {
+        // Hapus hash #pdf dari tautan jika ada
+        const cleanUrl = v.brochure_img.endsWith("#pdf") 
+          ? v.brochure_img.substring(0, v.brochure_img.length - 4) 
+          : v.brochure_img;
+          
+        pdfLink.href = getPdfBlobUrl(cleanUrl);
+        pdfContainer.classList.remove("hidden");
+      }
+    } else {
+      if (brochureImgEl) {
+        brochureImgEl.src = getDirectDriveImageUrl(v.brochure_img);
+        brochureImgEl.classList.remove("hidden");
+      }
     }
   } else {
     if (brochureImgEl) {
@@ -1092,9 +1114,12 @@ function handleBrochureUpload(e) {
 
   if (!file) {
     uploadedBrochureBase64 = "";
-    if (previewText) previewText.innerText = "Pilih foto brosur (atau kosongkan untuk acak)";
+    if (previewText) previewText.innerText = "Pilih foto/brosur PDF (atau kosongkan untuk acak)";
     if (thumbnail) thumbnail.classList.add("hidden");
-    if (icon) icon.classList.remove("hidden");
+    if (icon) {
+      icon.className = "fa-regular fa-image text-gray-400 text-sm";
+      icon.classList.remove("hidden");
+    }
     return;
   }
 
@@ -1102,12 +1127,30 @@ function handleBrochureUpload(e) {
 
   const reader = new FileReader();
   reader.onload = function(event) {
-    uploadedBrochureBase64 = event.target.result;
-    if (thumbnail) {
-      thumbnail.src = uploadedBrochureBase64;
-      thumbnail.classList.remove("hidden");
+    const rawBase64 = event.target.result;
+    
+    if (file.type === "application/pdf") {
+      // PDF: lewati kompresi, simpan base64 langsung
+      uploadedBrochureBase64 = rawBase64;
+      if (thumbnail) thumbnail.classList.add("hidden");
+      if (icon) {
+        icon.className = "fa-regular fa-file-pdf text-red-600 text-sm";
+        icon.classList.remove("hidden");
+      }
+    } else {
+      // Gambar: Kompresi menggunakan Canvas
+      compressBase64Image(rawBase64, 600, 600, 0.6, function(compressedBase64) {
+        uploadedBrochureBase64 = compressedBase64;
+        if (thumbnail) {
+          thumbnail.src = uploadedBrochureBase64;
+          thumbnail.classList.remove("hidden");
+        }
+        if (icon) {
+          icon.className = "fa-regular fa-image text-gray-400 text-sm";
+          icon.classList.add("hidden");
+        }
+      });
     }
-    if (icon) icon.classList.add("hidden");
   };
   reader.readAsDataURL(file);
 }
@@ -1350,4 +1393,58 @@ function getDirectDriveImageUrl(url) {
     }
   }
   return url;
+}
+
+function compressBase64Image(base64Str, maxWidth, maxHeight, quality, callback) {
+  if (!base64Str || !base64Str.startsWith("data:image/")) {
+    callback(base64Str);
+    return;
+  }
+  const img = new Image();
+  img.onload = function() {
+    let width = img.width;
+    let height = img.height;
+    if (width > height) {
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+    } else {
+      if (height > maxHeight) {
+        width = Math.round((width * maxHeight) / height);
+        height = maxHeight;
+      }
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, width, height);
+    const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+    callback(compressedBase64);
+  };
+  img.onerror = function() {
+    callback(base64Str);
+  };
+  img.src = base64Str;
+}
+
+function getPdfBlobUrl(base64Str) {
+  if (!base64Str) return "#";
+  if (base64Str.startsWith("data:application/pdf;base64,")) {
+    try {
+      const byteCharacters = atob(base64Str.split(",")[1]);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: "application/pdf" });
+      return URL.createObjectURL(blob);
+    } catch(e) {
+      console.error("Gagal menkonversi base64 pdf ke blob:", e);
+      return base64Str;
+    }
+  }
+  return base64Str;
 }
